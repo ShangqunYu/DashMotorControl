@@ -1,0 +1,14 @@
+../Core/drv8353.c:13:10:drv_spi_write	2
+../Core/drv8353.c:21:10:drv_read_FSR1	1
+../Core/drv8353.c:25:10:drv_read_FSR2	1
+../Core/drv8353.c:29:10:drv_read_register	1
+../Core/drv8353.c:32:6:drv_write_register	1
+../Core/drv8353.c:35:6:drv_write_DCR	1
+../Core/drv8353.c:39:6:drv_write_HSR	1
+../Core/drv8353.c:43:6:drv_write_LSR	1
+../Core/drv8353.c:47:6:drv_write_OCPCR	1
+../Core/drv8353.c:51:6:drv_write_CSACR	1
+../Core/drv8353.c:55:6:drv_enable_gd	1
+../Core/drv8353.c:59:6:drv_disable_gd	1
+../Core/drv8353.c:63:6:drv_calibrate	1
+../Core/drv8353.c:67:6:drv_print_faults	23
