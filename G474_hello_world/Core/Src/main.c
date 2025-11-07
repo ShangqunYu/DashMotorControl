@@ -26,6 +26,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
+#include "hw_config.h"
+#include "drv8353.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -96,6 +98,21 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
 	char spi_buf[20];
+	BitbangSPI spi;
+    BitbangSPI_Options opts = {
+        .mosi_port = DRV_MOSI_GPIO_Port,
+        .mosi_pin  = DRV_MOSI_Pin,
+        .miso_port = DRV_MISO_GPIO_Port,
+        .miso_pin  = DRV_MISO_Pin,
+        .sck_port  = DRV_SCLK_GPIO_Port,
+        .sck_pin   = DRV_SCLK_Pin,
+        .cs_port   = DRV_CS_GPIO_Port,
+        .cs_pin    = DRV_CS_Pin,
+        .frequency = 1000000,
+        .width     = 16,
+        .mode      = 1
+    };
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -122,6 +139,27 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET);
   uint16_t angle = 0;
+
+  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+
+  // start DRV
+  HAL_GPIO_WritePin(MOTOR_ENABLE_GPIO_Port, MOTOR_ENABLE_Pin, GPIO_PIN_SET);
+  // we need some delay after we setup the eable pin, otherwise the DRV chip won't be ready
+  HAL_Delay(50);
+
+  BitbangSPI_Init(&spi, &opts);
+  uint16_t input_val = (DCR<<11) | (0x0<<9) | (0x0<<8) | (0x0<<7) | (0x1<<5) | (0x0<<4) | (0x0<<3) | (0x0<<2) | (0x0<<1) | 0x1;
+
+  uint16_t val = drv_spi_write(&spi, input_val);     
+  //= BitbangSPI_Write(&spi, input_val);
+
+  uint16_t addr = (DCR<<11);
+  val = BitbangSPI_Read(&spi, addr);
+
+  write_config_registers(&spi);
+  read_config_registers(&spi);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

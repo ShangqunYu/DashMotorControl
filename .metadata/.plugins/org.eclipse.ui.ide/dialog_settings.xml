@@ -7,6 +7,7 @@
 		<item key="WizardProjectsImportPage.STORE_CLOSE_CREATED_PROJECTS_ID" value="false"/>
 		<item key="WizardProjectsImportPage.STORE_HIDE_CONFLICTING_PROJECTS_ID" value="false"/>
 		<list key="WizardProjectsImportPage.STORE_DIRECTORIES">
+			<item value="C:\Users\yusha\Repositories\motorcontrol"/>
 			<item value="C:\Users\yusha\STM32CubeIDE\workspace_1.19.0\G_usart"/>
 			<item value="C:\Users\yusha\Repositories\DashMotorControl\Firmware\DashMotorControl\G474_hello_world"/>
 		</list>

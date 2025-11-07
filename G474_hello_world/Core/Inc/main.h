@@ -57,8 +57,20 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define DRV_MOSI_Pin GPIO_PIN_13
+#define DRV_MOSI_GPIO_Port GPIOC
+#define MOTOR_ENABLE_Pin GPIO_PIN_14
+#define MOTOR_ENABLE_GPIO_Port GPIOC
+#define DRV_CS_Pin GPIO_PIN_0
+#define DRV_CS_GPIO_Port GPIOB
 #define ENC_CS_Pin GPIO_PIN_2
 #define ENC_CS_GPIO_Port GPIOB
+#define LED2_Pin GPIO_PIN_6
+#define LED2_GPIO_Port GPIOC
+#define DRV_SCLK_Pin GPIO_PIN_10
+#define DRV_SCLK_GPIO_Port GPIOC
+#define DRV_MISO_Pin GPIO_PIN_11
+#define DRV_MISO_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 

@@ -1,0 +1,4 @@
+../Core/Src/stm32_bitbang_spi.c:11:13:delay_us	2
+../Core/Src/stm32_bitbang_spi.c:18:6:BitbangSPI_Init	4
+../Core/Src/stm32_bitbang_spi.c:44:10:BitbangSPI_Write	4
+../Core/Src/stm32_bitbang_spi.c:81:10:BitbangSPI_Read	1

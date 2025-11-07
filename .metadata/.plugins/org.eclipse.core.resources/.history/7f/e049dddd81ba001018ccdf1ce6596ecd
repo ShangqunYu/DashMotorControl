@@ -1,0 +1,14 @@
+/*
+ * stm32_bitbang_spi.h
+ *
+ *  Created on: Nov 5, 2025
+ *      Author: yusha
+ */
+
+#ifndef INC_STM32_BITBANG_SPI_H_
+#define INC_STM32_BITBANG_SPI_H_
+
+
+
+
+#endif /* INC_STM32_BITBANG_SPI_H_ */

@@ -1,0 +1,96 @@
+/*
+ * stm32_bitbang_spi.h
+ *
+ *  Created on: Nov 5, 2025
+ *      Author: yusha
+ */
+
+#ifndef INC_STM32_BITBANG_SPI_H_
+#define INC_STM32_BITBANG_SPI_H_
+
+#include "main.h"      // includes HAL headers
+#include "stm32g4xx_hal.h"   // or your series (e.g., stm32f4xx_hal.h)
+#include <algorithm>
+
+class Stm32BitbangSpi {
+public:
+    struct Options {
+        GPIO_TypeDef* mosi_port;
+        uint16_t      mosi_pin;
+        GPIO_TypeDef* miso_port;
+        uint16_t      miso_pin;
+        GPIO_TypeDef* sck_port;
+        uint16_t      sck_pin;
+        GPIO_TypeDef* cs_port;
+        uint16_t      cs_pin;
+        int frequency = 1000000;   // default 1 MHz
+        int width = 16;            // number of bits per transfer
+        int mode = 1;              // CPOL=0, CPHA=1 (same as moteus)
+    };
+
+    Stm32BitbangSpi(const Options& options)
+        : options_(options) {
+
+        if (options_.mode != 1) {
+            Error_Handler(); // or handle differently
+        }
+
+        // Compute approximate half clock period in microseconds
+        us_delay_ = std::max(1, 500000 / options_.frequency);
+
+        // Initialize GPIOs (make sure they are already configured as GPIO outputs/inputs in CubeMX)
+        HAL_GPIO_WritePin(options_.sck_port, options_.sck_pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(options_.mosi_port, options_.mosi_pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(options_.cs_port,  options_.cs_pin,  GPIO_PIN_SET);
+    }
+
+    uint16_t write(uint16_t value) {
+        HAL_GPIO_WritePin(options_.cs_port, options_.cs_pin, GPIO_PIN_RESET);
+        delay_us(us_delay_);
+
+        uint16_t result = 0;
+
+        for (int i = options_.width; i > 0; i--) {
+            // Write MOSI bit
+            if (value & (1 << (i - 1)))
+                HAL_GPIO_WritePin(options_.mosi_port, options_.mosi_pin, GPIO_PIN_SET);
+            else
+                HAL_GPIO_WritePin(options_.mosi_port, options_.mosi_pin, GPIO_PIN_RESET);
+
+            // Clock high
+            HAL_GPIO_WritePin(options_.sck_port, options_.sck_pin, GPIO_PIN_SET);
+            delay_us(us_delay_);
+
+            // Clock low
+            HAL_GPIO_WritePin(options_.sck_port, options_.sck_pin, GPIO_PIN_RESET);
+
+            // Read MISO bit
+            result <<= 1;
+            if (HAL_GPIO_ReadPin(options_.miso_port, options_.miso_pin) == GPIO_PIN_SET)
+                result |= 1;
+
+            delay_us(us_delay_);
+        }
+
+        // Return to idle
+        HAL_GPIO_WritePin(options_.mosi_port, options_.mosi_pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(options_.cs_port, options_.cs_pin, GPIO_PIN_SET);
+        delay_us(us_delay_);
+
+        return result;
+    }
+
+private:
+    Options options_;
+    uint32_t us_delay_;
+
+    // --- Simple microsecond delay ---
+    void delay_us(uint32_t us) {
+        uint32_t start = DWT->CYCCNT;
+        uint32_t ticks = us * (SystemCoreClock / 1000000);
+        while ((DWT->CYCCNT - start) < ticks);
+    }
+};
+
+
+#endif /* INC_STM32_BITBANG_SPI_H_ */

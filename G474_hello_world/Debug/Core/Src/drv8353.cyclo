@@ -1,0 +1,9 @@
+../Core/Src/drv8353.c:15:6:write_config_registers	1
+../Core/Src/drv8353.c:28:6:read_config_registers	1
+../Core/Src/drv8353.c:43:10:drv_spi_write	1
+../Core/Src/drv8353.c:47:10:drv_read_register	1
+../Core/Src/drv8353.c:52:6:drv_write_DCR	1
+../Core/Src/drv8353.c:56:6:drv_write_HSR	1
+../Core/Src/drv8353.c:60:6:drv_write_LSR	1
+../Core/Src/drv8353.c:64:6:drv_write_OCPCR	1
+../Core/Src/drv8353.c:68:6:drv_write_CSACR	1
