@@ -1,4 +1,4 @@
 ../Core/Src/main.c:73:10:readMagAlphaAngle	1
 ../Core/Src/main.c:96:5:main	1
-../Core/Src/main.c:185:6:SystemClock_Config	3
-../Core/Src/main.c:229:6:Error_Handler	1
+../Core/Src/main.c:176:6:SystemClock_Config	3
+../Core/Src/main.c:220:6:Error_Handler	1

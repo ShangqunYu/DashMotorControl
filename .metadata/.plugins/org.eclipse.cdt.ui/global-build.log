@@ -1,7 +1,32 @@
-22:54:11 **** Incremental Build of configuration Debug for project G474_hello_world ****
+10:46:10 **** Incremental Build of configuration Debug for project G474_hello_world ****
+make -j16 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G474xx -c -I../Core/Inc -I../Drivers/STM32G4xx_HAL_Driver/Inc -I../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/main.o"
+../Core/Src/main.c: In function 'main':
+../Core/Src/main.c:100:14: warning: unused variable 'spi_buf' [-Wunused-variable]
+  100 |         char spi_buf[20];
+      |              ^~~~~~~
+arm-none-eabi-g++ -o "G474_hello_world.elf" @"objects.list"   -mcpu=cortex-m4 -T"C:\Users\yusha\Repositories\DashMotorControl\Firmware\DashMotorControl\G474_hello_world\STM32G474CEUX_FLASH.ld" -Wl,-Map="G474_hello_world.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+Finished building target: G474_hello_world.elf
+ 
+arm-none-eabi-size  G474_hello_world.elf 
+arm-none-eabi-objdump -h -S G474_hello_world.elf  > "G474_hello_world.list"
+   text	   data	    bss	    dec	    hex	filename
+  21648	    104	   2256	  24008	   5dc8	G474_hello_world.elf
+Finished building: default.size.stdout
+ 
+Finished building: G474_hello_world.list
+ 
+10:46:16 **** Incremental Build of configuration Debug for project G474_hello_world ****
 make -j16 all 
 arm-none-eabi-size  G474_hello_world.elf 
    text	   data	    bss	    dec	    hex	filename
-  21780	    104	   2256	  24140	   5e4c	G474_hello_world.elf
+  21648	    104	   2256	  24008	   5dc8	G474_hello_world.elf
+Finished building: default.size.stdout
+ 
+12:38:24 **** Incremental Build of configuration Debug for project G474_hello_world ****
+make -j16 all 
+arm-none-eabi-size  G474_hello_world.elf 
+   text	   data	    bss	    dec	    hex	filename
+  21648	    104	   2256	  24008	   5dc8	G474_hello_world.elf
 Finished building: default.size.stdout
  

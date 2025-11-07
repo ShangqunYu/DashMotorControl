@@ -142,20 +142,11 @@ int main(void)
 
   HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
 
-  // start DRV
+  // Enable DRV ship for motor and start writing config
   HAL_GPIO_WritePin(MOTOR_ENABLE_GPIO_Port, MOTOR_ENABLE_Pin, GPIO_PIN_SET);
   // we need some delay after we setup the eable pin, otherwise the DRV chip won't be ready
   HAL_Delay(50);
-
   BitbangSPI_Init(&spi, &opts);
-  uint16_t input_val = (DCR<<11) | (0x0<<9) | (0x0<<8) | (0x0<<7) | (0x1<<5) | (0x0<<4) | (0x0<<3) | (0x0<<2) | (0x0<<1) | 0x1;
-
-  uint16_t val = drv_spi_write(&spi, input_val);     
-  //= BitbangSPI_Write(&spi, input_val);
-
-  uint16_t addr = (DCR<<11);
-  val = BitbangSPI_Read(&spi, addr);
-
   write_config_registers(&spi);
   read_config_registers(&spi);
 
