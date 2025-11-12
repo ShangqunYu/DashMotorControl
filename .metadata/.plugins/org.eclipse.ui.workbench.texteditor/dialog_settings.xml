@@ -3,6 +3,12 @@
 	<item key="hasShownOverlayPopupBefore" value="true"/>
 	<item key="replaceBarOpen" value="false"/>
 	<list key="searchhistory">
+		<item value="RCR"/>
+		<item value="led"/>
+		<item value="position"/>
+		<item value="HAL_UART_Transmit"/>
+		<item value="STEP_SIZE"/>
+		<item value="enable"/>
 		<item value="del"/>
 		<item value="SystemCoreClock"/>
 		<item value="DWT"/>

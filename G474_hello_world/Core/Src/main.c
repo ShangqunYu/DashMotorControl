@@ -20,6 +20,7 @@
 #include "main.h"
 #include "fdcan.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -48,7 +49,29 @@ uint16_t spi_tx_word = 0x0000;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+// Sine lookup table (256 values for 0 to 2*PI)
+const uint8_t sine_table[256] = {
+    128, 131, 134, 137, 140, 143, 146, 149, 152, 155, 158, 161, 164, 167, 170, 173,
+    176, 179, 182, 185, 187, 190, 193, 195, 198, 200, 203, 205, 208, 210, 212, 215,
+    217, 219, 221, 223, 225, 227, 229, 231, 232, 234, 236, 237, 239, 240, 242, 243,
+    244, 245, 247, 248, 249, 249, 250, 251, 252, 252, 253, 253, 253, 254, 254, 254,
+    254, 254, 254, 254, 253, 253, 253, 252, 252, 251, 250, 249, 249, 248, 247, 245,
+    244, 243, 242, 240, 239, 237, 236, 234, 232, 231, 229, 227, 225, 223, 221, 219,
+    217, 215, 212, 210, 208, 205, 203, 200, 198, 195, 193, 190, 187, 185, 182, 179,
+    176, 173, 170, 167, 164, 161, 158, 155, 152, 149, 146, 143, 140, 137, 134, 131,
+    128, 124, 121, 118, 115, 112, 109, 106, 103, 100, 97, 94, 91, 88, 85, 82,
+    79, 76, 73, 70, 68, 65, 62, 60, 57, 55, 52, 50, 47, 45, 43, 40,
+    38, 36, 34, 32, 30, 28, 26, 24, 23, 21, 19, 18, 16, 15, 13, 12,
+    11, 10, 8, 7, 6, 6, 5, 4, 3, 3, 2, 2, 2, 1, 1, 1,
+    1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5, 6, 6, 7, 8, 10,
+    11, 12, 13, 15, 16, 18, 19, 21, 23, 24, 26, 28, 30, 32, 34, 36,
+    38, 40, 43, 45, 47, 50, 52, 55, 57, 60, 62, 65, 68, 70, 73, 76,
+    79, 82, 85, 88, 91, 94, 97, 100, 103, 106, 109, 112, 115, 118, 121, 124
+};
 
+uint8_t sine_index = 0;          // Index for sine table lookup
+const uint8_t STEP_SIZE = 1;     // Controls speed of rotation (1-8 recommended)
+const float AMPLITUDE = 0.5f;    // PWM amplitude (0.0 to 1.0)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -136,6 +159,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_SPI1_Init();
   MX_FDCAN2_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET);
   uint16_t angle = 0;
@@ -144,24 +168,122 @@ int main(void)
 
   // Enable DRV ship for motor and start writing config
   HAL_GPIO_WritePin(MOTOR_ENABLE_GPIO_Port, MOTOR_ENABLE_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(MOTOR_HIZ_GPIO_Port, MOTOR_HIZ_Pin, GPIO_PIN_SET);
   // we need some delay after we setup the eable pin, otherwise the DRV chip won't be ready
   HAL_Delay(50);
   BitbangSPI_Init(&spi, &opts);
   write_config_registers(&spi);
   read_config_registers(&spi);
+  HAL_Delay(50);
 
+  // read pin state test
+  GPIO_PinState pin_state = HAL_GPIO_ReadPin(MOTOR_FAULT_GPIO_Port, MOTOR_FAULT_Pin);
+  printf("Motor Fault Pin State: %d\n", pin_state);
+
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+
+  HAL_Delay(50);
+
+  HAL_TIM_Base_Start_IT(&htim2);
+
+  // receive message from user via putty, will be a number between 0-5
+
+
+
+
+//  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, htim2.Init.Period);
+//  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, htim2.Init.Period);
+//  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, htim2.Init.Period);
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  while (1) {
+	  uint8_t buf[1];
+	  if (HAL_UART_Receive(&huart2, buf, 1, 1000)==HAL_OK){
+		  // print out
+		  printf("Received via UART: %c\n\r", buf[0]);
+
+      if (buf[0]==100){
+        // change htim2.Init.Period to 16000
+          uint32_t new_period = 160000; // desired ARR value
+
+          // 1) Set ARR (Auto-reload)
+          __HAL_TIM_SET_AUTORELOAD(&htim2, new_period);
+
+          // 2) Optionally reset the counter (start from 0)
+          __HAL_TIM_SET_COUNTER(&htim2, 0);
+          printf("init.period %u\n\r", (unsigned int) htim2.Init.Period);
+
+      }
+
+		  if (buf[0]==97){
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, htim2.Init.Period/64);
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+		      printf("setting a\n\r");
+		  }  else if (buf[0] == 98) {
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, htim2.Init.Period/64);
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+		      printf("setting b\n\r");
+		  } else if (buf[0] == 99){
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, htim2.Init.Period/64);
+		      printf("setting c\n\r");
+		  }
+
+	  } else {
+		  printf("no data \n\r");
+	  }
+	  HAL_Delay(1);
+      pin_state = HAL_GPIO_ReadPin(MOTOR_FAULT_GPIO_Port, MOTOR_FAULT_Pin);
+      if(pin_state == GPIO_PIN_RESET) {
+          printf("Motor Fault Detected!\n\r");
+          uint16_t fault0 = drv_read_register(&spi, FSR1);
+          uint16_t fault1 = drv_read_register(&spi, FSR2);
+          printf("FSR1: %u, FSR2: %u\n", (unsigned int)fault0, (unsigned int)fault1);
+
+      }
+  }
+
   while (1)
   {
-	  angle = readMagAlphaAngle();
-	  float angleDeg = ((float)angle / 65536.0f) * 360.0f;
-	  uint16_t angleInt = (uint16_t) angleDeg;
-	  printf("Angle = %u\n\r", angleInt);
-	  HAL_Delay(1000);
+      // Get sine values for each phase (120 degrees apart)
+      // uint8_t phase_a = sine_table[sine_index];
+      // uint8_t phase_b = sine_table[(sine_index + 85) & 0xFF];  // +85 is about 120 degrees
+      // uint8_t phase_c = sine_table[(sine_index + 170) & 0xFF]; // +170 is about 240 degrees
+      
+      // Convert 0-255 sine values to PWM duty cycle
+      uint32_t period = htim2.Init.Period;
+      // uint32_t ccr1 = (uint32_t)((float)phase_a / 255.0f * period * AMPLITUDE + (period / 2));
+      // uint32_t ccr2 = (uint32_t)((float)phase_b / 255.0f * period * AMPLITUDE + (period / 2));
+      // uint32_t ccr3 = (uint32_t)((float)phase_c / 255.0f * period * AMPLITUDE + (period / 2));
+
+      // Update PWM duty cycles
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, htim2.Init.Period/16);
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+      
+      // Increment angle for rotation
+      sine_index = (sine_index + STEP_SIZE) & 0xFF;
+      
+      // Small delay to control speed
+      HAL_Delay(1);
+
+      // Monitor fault pin (optional)
+      pin_state = HAL_GPIO_ReadPin(MOTOR_FAULT_GPIO_Port, MOTOR_FAULT_Pin);
+      if(pin_state == GPIO_PIN_RESET) {
+          printf("Motor Fault Detected!\n\r");
+          uint16_t fault0 = drv_read_register(&spi, FSR1);
+          uint16_t fault1 = drv_read_register(&spi, FSR2);
+          printf("FSR1: %u, FSR2: %u\n", (unsigned int)fault0, (unsigned int)fault1);
+
+      }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -180,7 +302,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
+  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1_BOOST);
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -188,7 +310,13 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV4;
+  RCC_OscInitStruct.PLL.PLLN = 85;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -198,12 +326,12 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }

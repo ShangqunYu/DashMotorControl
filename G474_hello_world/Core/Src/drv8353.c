@@ -32,11 +32,11 @@ void read_config_registers(BitbangSPI* spi){
 	uint16_t ocpcr = drv_read_register(spi, OCPCR);
 	uint16_t csacr = drv_read_register(spi, CSACR);
 
-	printf("DCR: 0x%04X\n", dcr);
-	printf("HSR: 0x%04X\n", hsr);
-	printf("LSR: 0x%04X\n", lsr);
-	printf("OCPCR: 0x%04X\n", ocpcr);
-	printf("CSACR: 0x%04X\n", csacr);
+	printf("DCR: 0x%04X\n\r", dcr);
+	printf("HSR: 0x%04X\n\r", hsr);
+	printf("LSR: 0x%04X\n\r", lsr);
+	printf("OCPCR: 0x%04X\n\r", ocpcr);
+	printf("CSACR: 0x%04X\n\r", csacr);
 }
 
 
