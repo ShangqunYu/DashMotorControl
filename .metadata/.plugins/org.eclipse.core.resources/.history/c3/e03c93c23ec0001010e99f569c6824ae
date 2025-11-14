@@ -1,0 +1,37 @@
+/*
+ * foc.c
+ *
+ *  Created on: Nov 12, 2025
+ *      Author: Simon
+ */
+
+
+#include "foc.h"
+#include "tim.h"
+
+
+void set_dtc(ControllerStruct *controller){
+
+	/* Invert duty cycle if that's how hardware is configured */
+
+	float dtc_u = controller->dtc_u;
+	float dtc_v = controller->dtc_v;
+	float dtc_w = controller->dtc_w;
+
+	if(INVERT_DTC){
+		dtc_u = 1.0f - controller->dtc_u;
+		dtc_v = 1.0f - controller->dtc_v;
+		dtc_w = 1.0f - controller->dtc_w;
+	}
+	/* Handle phase order swapping so that voltage/current/torque match encoder direction */
+	if(!PHASE_ORDER){
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, ((TIM_PWM.Instance->ARR))*dtc_u);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, ((TIM_PWM.Instance->ARR))*dtc_v);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, ((TIM_PWM.Instance->ARR))*dtc_w);
+	}
+	else{
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, ((TIM_PWM.Instance->ARR))*dtc_u);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, ((TIM_PWM.Instance->ARR))*dtc_v);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, ((TIM_PWM.Instance->ARR))*dtc_w);
+	}
+}

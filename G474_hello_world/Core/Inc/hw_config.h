@@ -9,11 +9,11 @@
 #define INC_HW_CONFIG_H_
 
 /* Timer and PWM */
-#define TIM_PWM			htim1				// PWM/ISR timer handle
+#define TIM_PWM			htim2				// PWM/ISR timer handle
 #define TIM_CH_U		TIM_CHANNEL_1		// Terminal U timer channel
 #define TIM_CH_V		TIM_CHANNEL_2		// Terminal V timer channel
 #define TIM_CH_W		TIM_CHANNEL_3		// Terminal W timer channel
-#define INVERT_DTC		1					// PWM inverting (1) or non-inverting (0)
+#define INVERT_DTC		0					// PWM inverting (1) or non-inverting (0)
 
 /* ISRs */
 #define PWM_ISR			TIM1_UP_TIM10_IRQn	// PWM Timer ISR
@@ -47,7 +47,7 @@
 
 /* Other hardware-related constants */
 #define I_SCALE 			0.0201416f  // Amps per A/D Count at 40X amplifier gain
-#define V_SCALE 			0.0128906f    // Bus volts per A/D Count
+#define V_SCALE 			0.0128906f    // Bus volts per A/D Count   logic: 3.3V/4096 counts with 15:1 voltage divider
 #define DTC_MAX 			0.94f          	// Max duty cycle
 #define DTC_MIN 			0.0f          	// Min duty cycle
 #define DTC_COMP 			0.000f          // deadtime compensation (100 ns / 25 us)

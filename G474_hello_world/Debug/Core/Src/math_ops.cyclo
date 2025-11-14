@@ -1,0 +1,10 @@
+../Core/Src/math_ops.c:12:7:fast_fmaxf	2
+../Core/Src/math_ops.c:17:7:fast_fminf	2
+../Core/Src/math_ops.c:22:7:fmaxf3	4
+../Core/Src/math_ops.c:27:7:fminf3	4
+../Core/Src/math_ops.c:37:6:limit_norm	2
+../Core/Src/math_ops.c:46:6:limit	1
+../Core/Src/math_ops.c:50:5:float_to_uint	1
+../Core/Src/math_ops.c:58:7:uint_to_float	1
+../Core/Src/math_ops.c:65:7:sin_lut	2
+../Core/Src/math_ops.c:72:7:cos_lut	1

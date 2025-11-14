@@ -1,0 +1,10 @@
+/*
+ * foc.c
+ *
+ *  Created on: Nov 12, 2025
+ *      Author: Simon
+ */
+
+
+#include "foc.h"
+#include "tim.h"

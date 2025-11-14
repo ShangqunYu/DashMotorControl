@@ -1,31 +1,14 @@
-13:39:04 **** Incremental Build of configuration Debug for project G474_hello_world ****
+23:10:52 **** Incremental Build of configuration Debug for project G474_hello_world ****
 make -j16 all 
-arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G474xx -c -I../Core/Inc -I../Drivers/STM32G4xx_HAL_Driver/Inc -I../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/main.o"
-../Core/Src/main.c: In function 'main':
-../Core/Src/main.c:262:16: warning: unused variable 'period' [-Wunused-variable]
-  262 |       uint32_t period = htim2.Init.Period;
-      |                ^~~~~~
-../Core/Src/main.c:165:12: warning: unused variable 'angle' [-Wunused-variable]
-  165 |   uint16_t angle = 0;
-      |            ^~~~~
-../Core/Src/main.c:123:14: warning: unused variable 'spi_buf' [-Wunused-variable]
-  123 |         char spi_buf[20];
-      |              ^~~~~~~
+arm-none-eabi-gcc "../Core/Src/foc.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G474xx -c -I../Core/Inc -I../Drivers/STM32G4xx_HAL_Driver/Inc -I../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/foc.d" -MT"Core/Src/foc.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/foc.o"
 arm-none-eabi-g++ -o "G474_hello_world.elf" @"objects.list"   -mcpu=cortex-m4 -T"C:\Users\yusha\Repositories\DashMotorControl\Firmware\DashMotorControl\G474_hello_world\STM32G474CEUX_FLASH.ld" -Wl,-Map="G474_hello_world.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
 Finished building target: G474_hello_world.elf
  
 arm-none-eabi-size  G474_hello_world.elf 
 arm-none-eabi-objdump -h -S G474_hello_world.elf  > "G474_hello_world.list"
    text	   data	    bss	    dec	    hex	filename
-  27108	    104	   2328	  29540	   7364	G474_hello_world.elf
+  29344	    104	   2328	  31776	   7c20	G474_hello_world.elf
 Finished building: default.size.stdout
  
 Finished building: G474_hello_world.list
- 
-13:39:07 **** Incremental Build of configuration Debug for project G474_hello_world ****
-make -j16 all 
-arm-none-eabi-size  G474_hello_world.elf 
-   text	   data	    bss	    dec	    hex	filename
-  27108	    104	   2328	  29540	   7364	G474_hello_world.elf
-Finished building: default.size.stdout
  

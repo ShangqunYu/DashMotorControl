@@ -1,0 +1,16 @@
+/*
+ * foc.h
+ *
+ *  Created on: Nov 10, 2025
+ *      Author: yusha
+ */
+
+#ifndef INC_FOC_H_
+#define INC_FOC_H_
+
+#include <stdint.h>
+#include "position_sensor.h"
+
+
+
+#endif /* INC_FOC_H_ */

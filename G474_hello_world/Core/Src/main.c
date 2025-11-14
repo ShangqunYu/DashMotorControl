@@ -29,6 +29,7 @@
 #include "stdio.h"
 #include "hw_config.h"
 #include "drv8353.h"
+#include "pwm_util.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -107,8 +108,7 @@ uint16_t readMagAlphaAngle(void)
   angleSensor=rxData[0] | rxData[1] <<8;
   return angleSensor;
 }
-
-
+/* setPwmFreqency moved to Core/Src/pwm_util.c */
 
 /* USER CODE END 0 */
 
@@ -207,20 +207,32 @@ int main(void)
 		  // print out
 		  printf("Received via UART: %c\n\r", buf[0]);
 
-      if (buf[0]==100){
-        // change htim2.Init.Period to 16000
-          uint32_t new_period = 160000; // desired ARR value
-
-          // 1) Set ARR (Auto-reload)
-          __HAL_TIM_SET_AUTORELOAD(&htim2, new_period);
-
-          // 2) Optionally reset the counter (start from 0)
-          __HAL_TIM_SET_COUNTER(&htim2, 0);
-          printf("init.period %u\n\r", (unsigned int) htim2.Init.Period);
-
+      // music
+      if ((char)buf[0]=='c') {
+        setPwmFreqency(261.625);
+      }
+      if ((char)buf[0]=='d') {
+        setPwmFreqency(293.6648);
+      }
+      if ((char)buf[0]=='e') {
+        setPwmFreqency(329.6276);
+      }
+      if ((char)buf[0]=='f') {
+        setPwmFreqency(349.2282);
+      }
+      if ((char)buf[0]=='g') {
+        setPwmFreqency(391.9954);
+      }
+      if ((char)buf[0]=='a') {
+        setPwmFreqency(440.0);
+      }
+      if ((char)buf[0]=='b') {
+        setPwmFreqency(493.8833);
       }
 
-		  if (buf[0]==97){
+
+      // phases
+		  if ((1 == 1) || buf[0]==97){
 		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, htim2.Init.Period/64);
 		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
 		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);

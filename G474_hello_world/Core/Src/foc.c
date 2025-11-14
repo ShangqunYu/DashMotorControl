@@ -1,0 +1,143 @@
+/*
+ * foc.c
+ *
+ *  Created on: Nov 12, 2025
+ *      Author: Simon
+ */
+
+
+#include "foc.h"
+#include "tim.h"
+#include "hw_config.h"
+#include "user_config.h"
+#include "math_ops.h"
+
+void set_dtc(ControllerStruct *controller){
+
+	/* Invert duty cycle if that's how hardware is configured */
+
+	float dtc_u = controller->dtc_u;
+	float dtc_v = controller->dtc_v;
+	float dtc_w = controller->dtc_w;
+
+	if(INVERT_DTC){
+		dtc_u = 1.0f - controller->dtc_u;
+		dtc_v = 1.0f - controller->dtc_v;
+		dtc_w = 1.0f - controller->dtc_w;
+	}
+	/* Handle phase order swapping so that voltage/current/torque match encoder direction */
+	if(!PHASE_ORDER){
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, ((TIM_PWM.Instance->ARR))*dtc_u);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, ((TIM_PWM.Instance->ARR))*dtc_v);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, ((TIM_PWM.Instance->ARR))*dtc_w);
+	}
+	else{
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, ((TIM_PWM.Instance->ARR))*dtc_u);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, ((TIM_PWM.Instance->ARR))*dtc_v);
+		__HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, ((TIM_PWM.Instance->ARR))*dtc_w);
+	}
+}
+
+
+void abc( float theta, float d, float q, float *a, float *b, float *c){
+    /* Inverse DQ0 Transform
+    Phase current amplitude = lengh of dq vector
+    i.e. iq = 1, id = 0, peak phase current of 1 */
+
+    float cf = cos_lut(theta);
+    float sf = sin_lut(theta);
+
+    *a = cf*d - sf*q;
+    *b = (SQRT3_2*sf-.5f*cf)*d - (-SQRT3_2*cf-.5f*sf)*q;
+    *c = (-SQRT3_2*sf-.5f*cf)*d - (SQRT3_2*cf-.5f*sf)*q;
+    }
+
+void dq0(float theta, float a, float b, float c, float *d, float *q){
+    /* DQ0 Transform
+    Phase current amplitude = lengh of dq vector
+    i.e. iq = 1, id = 0, peak phase current of 1*/
+
+    float cf = cos_lut(theta);
+    float sf = sin_lut(theta);
+
+    *d = 0.6666667f*(cf*a + (SQRT3_2*sf-.5f*cf)*b + (-SQRT3_2*sf-.5f*cf)*c);   ///Faster DQ0 Transform
+    *q = 0.6666667f*(-sf*a - (-SQRT3_2*cf-.5f*sf)*b - (SQRT3_2*cf-.5f*sf)*c);
+
+    }
+
+
+void svm(float v_max, float u, float v, float w, float *dtc_u, float *dtc_v, float *dtc_w){
+    /* Space Vector Modulation
+     u,v,w amplitude = v_bus for full modulation depth */
+
+    float v_offset = (fminf3(u, v, w) + fmaxf3(u, v, w))*0.5f;
+    float v_midpoint = .5f*(DTC_MAX+DTC_MIN);
+
+    *dtc_u = fast_fminf(fast_fmaxf((.5f*(u -v_offset)*OVERMODULATION/v_max + v_midpoint ), DTC_MIN), DTC_MAX);
+    *dtc_v = fast_fminf(fast_fmaxf((.5f*(v -v_offset)*OVERMODULATION/v_max + v_midpoint ), DTC_MIN), DTC_MAX);
+    *dtc_w = fast_fminf(fast_fmaxf((.5f*(w -v_offset)*OVERMODULATION/v_max + v_midpoint ), DTC_MIN), DTC_MAX);
+
+    }
+
+
+void commutate(ControllerStruct *controller, EncoderStruct *encoder)
+{
+	/* Do Field Oriented Control */
+
+		controller->theta_elec = encoder->elec_angle;
+		controller->dtheta_elec = encoder->elec_velocity;
+		controller->dtheta_mech = encoder->velocity/GR;
+		controller->theta_mech = encoder->angle_multiturn[0]/GR;
+
+       // getting the current for i_d and i_q
+       dq0(controller->theta_elec, controller->i_a, controller->i_b, controller->i_c, &controller->i_d, &controller->i_q);    //dq0 transform on currents - 3.8 us
+
+       // moving average of the iq and id to smooth out the noise these aren't used for control but are sometimes nice for debugging
+       controller->i_q_filt = (1.0f-CURRENT_FILT_ALPHA)*controller->i_q_filt + CURRENT_FILT_ALPHA*controller->i_q;
+       controller->i_d_filt = (1.0f-CURRENT_FILT_ALPHA)*controller->i_d_filt + CURRENT_FILT_ALPHA*controller->i_d;
+
+       // moving average of the vbus, used for voltage saturation
+       controller->v_bus_filt = (1.0f-VBUS_FILT_ALPHA)*controller->v_bus_filt + VBUS_FILT_ALPHA*controller->v_bus;
+
+       controller->v_max = OVERMODULATION*controller->v_bus_filt*(DTC_MAX-DTC_MIN)*SQRT1_3;
+       controller->v_margin = controller->v_max - controller->v_ref;
+       controller->i_max = I_MAX; //I_MAX*(!controller->otw_flag) + I_MAX_CONT*controller->otw_flag;
+
+       limit_norm(&controller->i_d_des, &controller->i_q_des, controller->i_max);	// 2.3 us
+
+       /// PI Controller ///
+       float i_d_error = controller->i_d_des - controller->i_d;
+       float i_q_error = controller->i_q_des - controller->i_q;
+
+       if(controller->i_q > controller->i_mag_max){
+    	   controller->i_mag_max = controller->i_q;
+       }
+
+
+       // Calculate decoupling feed-forward voltages //
+
+       float v_d_ff = 0.0f;//-SQRT3*controller->dtheta_elec*L_Q*controller->i_q;
+       float v_q_ff = 0.0f;//SQRT3*controller->dtheta_elec*(0.0f*L_D*controller->i_d + controller->flux_linkage);
+
+       controller->v_d = controller->k_d*i_d_error + controller->d_int + v_d_ff;
+
+       controller->v_d = fast_fmaxf(fast_fminf(controller->v_d, controller->v_max), -controller->v_max);
+
+       controller->d_int += controller->k_d*controller->ki_d*i_d_error;
+       controller->d_int = fast_fmaxf(fast_fminf(controller->d_int, controller->v_max), -controller->v_max);
+       float vq_max = controller->v_max;//sqrtf(controller->v_max*controller->v_max - controller->v_d*controller->v_d);
+
+       controller->v_q = controller->k_q*i_q_error + controller->q_int + v_q_ff;
+       controller->q_int += controller->k_q*controller->ki_q*i_q_error;
+       controller->q_int = fast_fmaxf(fast_fminf(controller->q_int, controller->v_max), -controller->v_max);
+       controller->v_ref = sqrtf(controller->v_d*controller->v_d + controller->v_q*controller->v_q);
+       controller->v_q = fast_fmaxf(fast_fminf(controller->v_q, vq_max), -vq_max);
+
+       limit_norm(&controller->v_d, &controller->v_q, controller->v_max);
+
+       abc(controller->theta_elec + 1.5f*DT*controller->dtheta_elec, controller->v_d, controller->v_q, &controller->v_u, &controller->v_v, &controller->v_w); //inverse dq0 transform on voltages
+       svm(controller->v_max, controller->v_u, controller->v_v, controller->v_w, &controller->dtc_u, &controller->dtc_v, &controller->dtc_w); //space vector modulation
+
+       set_dtc(controller);
+
+    }

@@ -1,0 +1,5 @@
+../Core/Src/foc.c:15:6:set_dtc	32	static
+../Core/Src/foc.c:42:6:abc	40	static
+../Core/Src/foc.c:55:6:dq0	40	static
+../Core/Src/foc.c:69:6:svm	56	static
+../Core/Src/foc.c:83:6:commutate	40	static

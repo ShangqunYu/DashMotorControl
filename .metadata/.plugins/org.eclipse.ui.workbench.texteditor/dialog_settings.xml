@@ -3,6 +3,9 @@
 	<item key="hasShownOverlayPopupBefore" value="true"/>
 	<item key="replaceBarOpen" value="false"/>
 	<list key="searchhistory">
+		<item value="PHASE_ORDER"/>
+		<item value="huart2"/>
+		<item value="io"/>
 		<item value="RCR"/>
 		<item value="led"/>
 		<item value="position"/>
