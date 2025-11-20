@@ -1,5 +1,7 @@
-../Core/Src/foc.c:15:6:set_dtc	1
-../Core/Src/foc.c:42:6:abc	1
-../Core/Src/foc.c:55:6:dq0	1
-../Core/Src/foc.c:69:6:svm	1
-../Core/Src/foc.c:83:6:commutate	2
+../Core/Src/foc.c:15:6:setDutyCycle	1
+../Core/Src/foc.c:37:6:abc	1
+../Core/Src/foc.c:50:6:dq0	1
+../Core/Src/foc.c:64:6:svm	1
+../Core/Src/foc.c:78:6:commutate	2
+../Core/Src/foc.c:140:6:torque_control	2
+../Core/Src/foc.c:149:6:openLoopControl	1

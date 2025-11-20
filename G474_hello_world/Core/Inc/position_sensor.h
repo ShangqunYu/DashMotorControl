@@ -33,6 +33,10 @@ typedef struct{
 	uint8_t first_sample;
 } EncoderStruct;
 
+uint16_t readMagAlphaAngle(void);
+void ps_sample(EncoderStruct * encoder, float dt);
+
+
 
 
 #endif /* INC_POSITION_SENSOR_H_ */

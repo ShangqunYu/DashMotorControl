@@ -1,0 +1,2 @@
+../Core/Src/position_sensor.c:12:10:readMagAlphaAngle	1
+../Core/Src/position_sensor.c:27:6:ps_sample	10

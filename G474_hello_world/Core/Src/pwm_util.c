@@ -24,3 +24,33 @@ void setPwmFreqency(float desiredPwmFrequencyHz)
     __HAL_TIM_SET_COUNTER(&htim2, 0);
     printf("init.period %u\n\r", (unsigned int) htim2.Init.Period);
 }
+
+void playNote(){
+    uint8_t buf[1];
+        if (HAL_UART_Receive(&huart2, buf, 1, 1)==HAL_OK){
+            // print out
+
+        // music
+        if ((char)buf[0]=='c') {
+        setPwmFreqency(261.625);
+        }
+        if ((char)buf[0]=='d') {
+        setPwmFreqency(293.6648);
+        }
+        if ((char)buf[0]=='e') {
+        setPwmFreqency(329.6276);
+        }
+        if ((char)buf[0]=='f') {
+        setPwmFreqency(349.2282);
+        }
+        if ((char)buf[0]=='g') {
+        setPwmFreqency(391.9954);
+        }
+        if ((char)buf[0]=='a') {
+        setPwmFreqency(440.0);
+        }
+        if ((char)buf[0]=='b') {
+        setPwmFreqency(493.8833);
+        }
+    }    
+}

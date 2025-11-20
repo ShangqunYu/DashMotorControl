@@ -11,4 +11,8 @@
 #define PHASE_ORDER  0                                    // Phase swapping during calibration
 #define I_MAX        20.0f
 #define GR           1										//gear ratio
+#define KT	         0.0289f
+#define PPAIRS       7										//number of pole pairs
+#define M_ZERO       0
+#define E_ZERO	     0
 #endif /* INC_USER_CONFIG_H_ */

@@ -56,11 +56,13 @@ typedef struct{
         float trust;											// Temperature observer "trust' (kind of like 1/covariance)
         float delta_t;											// Temperature rise
         }   ObserverStruct;
-	void set_dtc(ControllerStruct *controller);
+	void setDutyCycle(float dtc_u, float dtc_v, float dtc_w);
 	void abc(float theta, float d, float q, float *a, float *b, float *c);
 	void dq0(float theta, float a, float b, float c, float *d, float *q);
 	void svm(float v_max, float u, float v, float w, float *dtc_u, float *dtc_v, float *dtc_w);
 	void commutate(ControllerStruct *controller, EncoderStruct *encoder);
+	void torque_control(ControllerStruct *controller);
+    void openLoopControl(float x, float y);
 
 
 #endif /* INC_FOC_H_ */

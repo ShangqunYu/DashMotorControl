@@ -12,5 +12,6 @@
  * Note: This function expects TIM2 to be configured and running.
  */
 void setPwmFreqency(float desiredPwmFrequencyHz);
+void playNote();
 
 #endif // PWM_UTIL_H

@@ -1,0 +1,9 @@
+../Core/Src/flash_util.c:12:12:_is_valid_address	16	static
+../Core/Src/flash_util.c:19:12:_is_page_aligned	16	static
+../Core/Src/flash_util.c:26:15:Flash_ErasePage	48	static
+../Core/Src/flash_util.c:67:15:Flash_EraseBank	40	static
+../Core/Src/flash_util.c:96:15:Flash_WriteWord64	32	static
+../Core/Src/flash_util.c:120:15:Flash_WriteBuffer	56	static
+../Core/Src/flash_util.c:161:15:Flash_ReadBuffer	24	static
+../Core/Src/flash_util.c:178:10:Flash_GetPageAddress	24	static
+../Core/Src/flash_util.c:198:15:Flash_Verify	32	static

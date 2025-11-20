@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Move &apos;src.ioc&apos; to &apos;stm32-FOC-master&apos;" description="Move &apos;src.ioc&apos; to &apos;stm32-FOC-master&apos;" destination="/stm32-FOC-master" element1="src/src.ioc" flags="7" id="org.eclipse.ltk.core.refactoring.move.resources" resources="1" stamp="1763505720698" updateReferences="true"/>
+</session>

@@ -183,7 +183,7 @@ void drv_write_HSR(BitbangSPI* spi, int LOCK, int IDRIVEP_HS, int IDRIVEN_HS);
 void drv_write_LSR(BitbangSPI* spi, int CBC, int TDRIVE, int IDRIVEP_LS, int IDRIVEN_LS);
 void drv_write_OCPCR(BitbangSPI* spi, int TRETRY, int DEAD_TIME, int OCP_MODE, int OCP_DEG, int VDS_LVL);
 void drv_write_CSACR(BitbangSPI* spi, int CSA_FET, int VREF_DIV, int LS_REF, int CSA_GAIN, int DIS_SEN, int CSA_CAL_A, int CSA_CAL_B, int CSA_CAL_C, int SEN_LVL);
-// void drv_enable_gd(DRVStruct drv);
+//void drv_enable_gd(DRVStruct drv);
 // void drv_disable_gd(DRVStruct drv);
 // void drv_calibrate(DRVStruct drv);
 // void drv_print_faults(DRVStruct drv);

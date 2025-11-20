@@ -33,7 +33,7 @@
 #define DRV_CS			GPIOA, GPIO_PIN_4	// DRV CS pin
 
 /* SPI encoder */
-#define ENC_SPI			hspi3				// Encoder SPI handle
+#define ENC_SPI			hspi1				// Encoder SPI handle
 #define ENC_CS			GPIOA, GPIO_PIN_15	// Encoder SPI CS pin
 #define ENC_CPR			65536				// Encoder counts per revolution
 #define INV_CPR			1.0f/ENC_CPR
@@ -51,7 +51,7 @@
 #define DTC_MAX 			0.94f          	// Max duty cycle
 #define DTC_MIN 			0.0f          	// Min duty cycle
 #define DTC_COMP 			0.000f          // deadtime compensation (100 ns / 25 us)
-#define DT					.000025f		// Loop period
+#define DT					.00005f		// Loop period, ben has .000025f
 #define EN_ENC_LINEARIZATION 1				// Enable/disable encoder linearization
 #define V_BUS_MAX			40.0f			// max drive voltage (faults above this)
 

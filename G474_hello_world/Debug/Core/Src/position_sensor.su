@@ -1,0 +1,2 @@
+../Core/Src/position_sensor.c:12:10:readMagAlphaAngle	32	static
+../Core/Src/position_sensor.c:27:6:ps_sample	56	static

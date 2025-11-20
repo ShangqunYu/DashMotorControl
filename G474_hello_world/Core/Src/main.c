@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "fdcan.h"
 #include "spi.h"
 #include "tim.h"
@@ -30,6 +31,10 @@
 #include "hw_config.h"
 #include "drv8353.h"
 #include "pwm_util.h"
+#include "foc.h"
+#include "math_ops.h"
+#include "flash_util.h"
+#include "position_sensor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,29 +55,14 @@ uint16_t spi_tx_word = 0x0000;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-// Sine lookup table (256 values for 0 to 2*PI)
-const uint8_t sine_table[256] = {
-    128, 131, 134, 137, 140, 143, 146, 149, 152, 155, 158, 161, 164, 167, 170, 173,
-    176, 179, 182, 185, 187, 190, 193, 195, 198, 200, 203, 205, 208, 210, 212, 215,
-    217, 219, 221, 223, 225, 227, 229, 231, 232, 234, 236, 237, 239, 240, 242, 243,
-    244, 245, 247, 248, 249, 249, 250, 251, 252, 252, 253, 253, 253, 254, 254, 254,
-    254, 254, 254, 254, 253, 253, 253, 252, 252, 251, 250, 249, 249, 248, 247, 245,
-    244, 243, 242, 240, 239, 237, 236, 234, 232, 231, 229, 227, 225, 223, 221, 219,
-    217, 215, 212, 210, 208, 205, 203, 200, 198, 195, 193, 190, 187, 185, 182, 179,
-    176, 173, 170, 167, 164, 161, 158, 155, 152, 149, 146, 143, 140, 137, 134, 131,
-    128, 124, 121, 118, 115, 112, 109, 106, 103, 100, 97, 94, 91, 88, 85, 82,
-    79, 76, 73, 70, 68, 65, 62, 60, 57, 55, 52, 50, 47, 45, 43, 40,
-    38, 36, 34, 32, 30, 28, 26, 24, 23, 21, 19, 18, 16, 15, 13, 12,
-    11, 10, 8, 7, 6, 6, 5, 4, 3, 3, 2, 2, 2, 1, 1, 1,
-    1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5, 6, 6, 7, 8, 10,
-    11, 12, 13, 15, 16, 18, 19, 21, 23, 24, 26, 28, 30, 32, 34, 36,
-    38, 40, 43, 45, 47, 50, 52, 55, 57, 60, 62, 65, 68, 70, 73, 76,
-    79, 82, 85, 88, 91, 94, 97, 100, 103, 106, 109, 112, 115, 118, 121, 124
-};
 
 uint8_t sine_index = 0;          // Index for sine table lookup
 const uint8_t STEP_SIZE = 1;     // Controls speed of rotation (1-8 recommended)
 const float AMPLITUDE = 0.5f;    // PWM amplitude (0.0 to 1.0)
+
+ControllerStruct controller;
+
+EncoderStruct comm_encoder;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -94,20 +84,6 @@ void SystemClock_Config(void);
 //    return ch;
 //}
 
-uint16_t readMagAlphaAngle(void)
-{
-  uint32_t timeout=10;
-  uint8_t txData[2];
-  uint8_t rxData[2];
-  txData[1]=0;
-  txData[0]=0;
-  uint16_t angleSensor;
-  HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi1, txData, rxData, 2, timeout);
-  HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET);
-  angleSensor=rxData[0] | rxData[1] <<8;
-  return angleSensor;
-}
 /* setPwmFreqency moved to Core/Src/pwm_util.c */
 
 /* USER CODE END 0 */
@@ -120,8 +96,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	char spi_buf[20];
-	BitbangSPI spi;
+    BitbangSPI spi;
     BitbangSPI_Options opts = {
         .mosi_port = DRV_MOSI_GPIO_Port,
         .mosi_pin  = DRV_MOSI_Pin,
@@ -160,6 +135,9 @@ int main(void)
   MX_SPI1_Init();
   MX_FDCAN2_Init();
   MX_TIM2_Init();
+  MX_ADC1_Init();
+  MX_ADC2_Init();
+  MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET);
   uint16_t angle = 0;
@@ -188,6 +166,33 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim2);
 
+  /* Flash Writer Example (optional - comment out if not needed) */
+
+  FlashStatus_t flash_status;
+  uint8_t test_data[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+  uint8_t read_buffer[8] = {0};
+  
+  // Erase first page of Bank 2 (safe - Bank 1 contains your code)
+  printf("Erasing flash page 0 of Bank 2...\n\r");
+  flash_status = Flash_ErasePage(Flash_GetPageAddressBank2(0), 1);
+  printf("Erase result: %d\n\r", flash_status);
+  
+  // Write test data to Bank 2
+  printf("Writing test data to Bank 2 page 0...\n\r");
+  flash_status = Flash_WriteBuffer(Flash_GetPageAddressBank2(0), test_data, 8);
+  printf("Write result: %d\n\r", flash_status);
+  
+  // Read back and verify
+  printf("Reading back from Bank 2...\n\r");
+  flash_status = Flash_ReadBuffer(Flash_GetPageAddressBank2(0), read_buffer, 8);
+  printf("Read result: %d\n\r", flash_status);
+  
+  flash_status = Flash_Verify(Flash_GetPageAddressBank2(0), test_data, 8);
+  printf("Verify result: %d\n\r", flash_status);
+
+  // disable linearization
+  memset(&comm_encoder.offset_lut, 0, sizeof(comm_encoder.offset_lut));
+
   // receive message from user via putty, will be a number between 0-5
 
 
@@ -201,70 +206,95 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1) {
-	  uint8_t buf[1];
-	  if (HAL_UART_Receive(&huart2, buf, 1, 1000)==HAL_OK){
-		  // print out
-		  printf("Received via UART: %c\n\r", buf[0]);
+  // while (1) {
+	//   uint8_t buf[1];
+	//   if (HAL_UART_Receive(&huart2, buf, 1, 1000)==HAL_OK){
+	// 	  // print out
+	// 	  printf("Received via UART: %c\n\r", buf[0]);
 
-      // music
-      if ((char)buf[0]=='c') {
-        setPwmFreqency(261.625);
-      }
-      if ((char)buf[0]=='d') {
-        setPwmFreqency(293.6648);
-      }
-      if ((char)buf[0]=='e') {
-        setPwmFreqency(329.6276);
-      }
-      if ((char)buf[0]=='f') {
-        setPwmFreqency(349.2282);
-      }
-      if ((char)buf[0]=='g') {
-        setPwmFreqency(391.9954);
-      }
-      if ((char)buf[0]=='a') {
-        setPwmFreqency(440.0);
-      }
-      if ((char)buf[0]=='b') {
-        setPwmFreqency(493.8833);
-      }
+  //     // music
+  //     if ((char)buf[0]=='c') {
+  //       setPwmFreqency(261.625);
+  //     }
+  //     if ((char)buf[0]=='d') {
+  //       setPwmFreqency(293.6648);
+  //     }
+  //     if ((char)buf[0]=='e') {
+  //       setPwmFreqency(329.6276);
+  //     }
+  //     if ((char)buf[0]=='f') {
+  //       setPwmFreqency(349.2282);
+  //     }
+  //     if ((char)buf[0]=='g') {
+  //       setPwmFreqency(391.9954);
+  //     }
+  //     if ((char)buf[0]=='a') {
+  //       setPwmFreqency(440.0);
+  //     }
+  //     if ((char)buf[0]=='b') {
+  //       setPwmFreqency(493.8833);
+  //     }
 
 
-      // phases
-		  if ((1 == 1) || buf[0]==97){
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, htim2.Init.Period/64);
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
-		      printf("setting a\n\r");
-		  }  else if (buf[0] == 98) {
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, htim2.Init.Period/64);
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
-		      printf("setting b\n\r");
-		  } else if (buf[0] == 99){
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
-		      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, htim2.Init.Period/64);
-		      printf("setting c\n\r");
-		  }
+  //     // phases
+	// 	  if ((1 == 1) || buf[0]==97){
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, htim2.Init.Period/64);
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+	// 	      printf("setting a\n\r");
+	// 	  }  else if (buf[0] == 98) {
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, htim2.Init.Period/64);
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+	// 	      printf("setting b\n\r");
+	// 	  } else if (buf[0] == 99){
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+	// 	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, htim2.Init.Period/64);
+	// 	      printf("setting c\n\r");
+	// 	  }
 
-	  } else {
-		  printf("no data \n\r");
-	  }
-	  HAL_Delay(1);
-      pin_state = HAL_GPIO_ReadPin(MOTOR_FAULT_GPIO_Port, MOTOR_FAULT_Pin);
-      if(pin_state == GPIO_PIN_RESET) {
-          printf("Motor Fault Detected!\n\r");
-          uint16_t fault0 = drv_read_register(&spi, FSR1);
-          uint16_t fault1 = drv_read_register(&spi, FSR2);
-          printf("FSR1: %u, FSR2: %u\n", (unsigned int)fault0, (unsigned int)fault1);
+	//   } else {
+	// 	  printf("no data \n\r");
+	//   }
+	//   HAL_Delay(1);
+  //     pin_state = HAL_GPIO_ReadPin(MOTOR_FAULT_GPIO_Port, MOTOR_FAULT_Pin);
+  //     if(pin_state == GPIO_PIN_RESET) {
+  //         printf("Motor Fault Detected!\n\r");
+  //         uint16_t fault0 = drv_read_register(&spi, FSR1);
+  //         uint16_t fault1 = drv_read_register(&spi, FSR2);
+  //         printf("FSR1: %u, FSR2: %u\n", (unsigned int)fault0, (unsigned int)fault1);
 
-      }
-  }
-
+  //     }
+  // }
+  
   while (1)
   {
+    // increment angle for open loop control based on time, do it slowly 360 degree per seconds
+    // check elapsed time
+//	ps_sample(&comm_encoder, DT);
+    float mechanicalRotationsPerSecond = 1.0f;
+    float torqueMaginitude = 1.0f;
+    float polePairs = 7.0f;
+    float electricRotationsPerSecond = polePairs * mechanicalRotationsPerSecond;
+    float electricRottationsPerMiliSecond = electricRotationsPerSecond / 1000.0f;
+    uint32_t t = HAL_GetTick();
+  
+    float theta = t * electricRottationsPerMiliSecond * 6.28f;
+
+    float x = cos_lut(theta)*torqueMaginitude;
+    float y = sin_lut(theta)*torqueMaginitude;
+    openLoopControl(x, y);
+
+    playNote();
+
+    
+
+
+    // controller.dtc_u = 0.1f;
+    // controller.dtc_v = 0.0f;
+    // controller.dtc_w = 0.0f;
+    // setDutyCycle(&controller);
       // Get sine values for each phase (120 degrees apart)
       // uint8_t phase_a = sine_table[sine_index];
       // uint8_t phase_b = sine_table[(sine_index + 85) & 0xFF];  // +85 is about 120 degrees
@@ -277,17 +307,16 @@ int main(void)
       // uint32_t ccr3 = (uint32_t)((float)phase_c / 255.0f * period * AMPLITUDE + (period / 2));
 
       // Update PWM duty cycles
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, htim2.Init.Period/16);
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+
       
       // Increment angle for rotation
       sine_index = (sine_index + STEP_SIZE) & 0xFF;
+
+      
       
       // Small delay to control speed
       HAL_Delay(1);
 
-      // Monitor fault pin (optional)
       pin_state = HAL_GPIO_ReadPin(MOTOR_FAULT_GPIO_Port, MOTOR_FAULT_Pin);
       if(pin_state == GPIO_PIN_RESET) {
           printf("Motor Fault Detected!\n\r");
