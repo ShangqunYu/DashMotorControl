@@ -27,12 +27,12 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+void send_float(float f);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+float test = 0.0;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

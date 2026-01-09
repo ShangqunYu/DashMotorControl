@@ -3,6 +3,12 @@
 	<item key="hasShownOverlayPopupBefore" value="true"/>
 	<item key="replaceBarOpen" value="false"/>
 	<list key="searchhistory">
+		<item value="send_float"/>
+		<item value="printf"/>
+		<item value="MX_ADC1_Init"/>
+		<item value="adc"/>
+		<item value="user code begin 4"/>
+		<item value="hal_adce"/>
 		<item value="update_fsm"/>
 		<item value="enter_setup_state"/>
 		<item value="enter_menu_state"/>
@@ -12,11 +18,5 @@
 		<item value="sine_table"/>
 		<item value="FLASH_BANK1_START"/>
 		<item value="FLASH_PageErase"/>
-		<item value="erase"/>
-		<item value="HAL_FLASHEx_Erase"/>
-		<item value="PHASE_ORDER"/>
-		<item value="huart2"/>
-		<item value="io"/>
-		<item value="RCR"/>
 	</list>
 </section>

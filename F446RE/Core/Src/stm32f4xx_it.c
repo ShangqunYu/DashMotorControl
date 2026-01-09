@@ -205,7 +205,13 @@ void SysTick_Handler(void)
 void TIM1_UP_TIM10_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 0 */
-	printf("hello world \n\r");
+//	printf("hello world \n\r");
+	test += 0.01;
+  //mod by 100 to keep number small
+  if (test >= 5) {
+      test = 0;
+  }
+	send_float(test);
 
   /* USER CODE END TIM1_UP_TIM10_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
@@ -215,5 +221,9 @@ void TIM1_UP_TIM10_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
-
+void send_float(float f) {
+    uint8_t buf[4];
+    memcpy(buf, &f, 4);
+    HAL_UART_Transmit(&huart2, buf, 4, 1);
+}
 /* USER CODE END 1 */
