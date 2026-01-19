@@ -138,6 +138,7 @@ int main(void)
   MX_ADC1_Init();
   MX_ADC2_Init();
   MX_ADC3_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET);
   uint16_t angle = 0;
@@ -313,9 +314,12 @@ int main(void)
       sine_index = (sine_index + STEP_SIZE) & 0xFF;
 
       
-      
+      angle = readMagAlphaAngle2();
+
+      float angle_deg = (angle * 360.0f) / ENC_CPR;
+      printf("raw = %u, angle = %u deg\r\n", angle, (uint16_t) angle_deg);
       // Small delay to control speed
-      HAL_Delay(1);
+      HAL_Delay(500);
 
       pin_state = HAL_GPIO_ReadPin(MOTOR_FAULT_GPIO_Port, MOTOR_FAULT_Pin);
       if(pin_state == GPIO_PIN_RESET) {

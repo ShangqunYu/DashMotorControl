@@ -34,6 +34,7 @@ typedef struct{
 } EncoderStruct;
 
 uint16_t readMagAlphaAngle(void);
+uint16_t readMagAlphaAngle2(void);
 void ps_sample(EncoderStruct * encoder, float dt);
 
 

@@ -75,6 +75,8 @@ void Error_Handler(void);
 #define DRV_SCLK_GPIO_Port GPIOC
 #define DRV_MISO_Pin GPIO_PIN_11
 #define DRV_MISO_GPIO_Port GPIOC
+#define ENC_CS2_Pin GPIO_PIN_7
+#define ENC_CS2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

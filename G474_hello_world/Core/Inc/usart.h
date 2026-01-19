@@ -29,7 +29,7 @@ extern "C" {
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-int __io_putchar(int ch);
+//int __io_putchar(int ch);
 /* USER CODE END Includes */
 
 extern UART_HandleTypeDef huart2;

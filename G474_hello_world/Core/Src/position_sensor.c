@@ -24,6 +24,21 @@ uint16_t readMagAlphaAngle(void)
   return angleSensor;
 }
 
+uint16_t readMagAlphaAngle2(void)
+{
+  uint32_t timeout=10;
+  uint8_t txData[2];
+  uint8_t rxData[2];
+  txData[1]=0;
+  txData[0]=0;
+  uint16_t angleSensor;
+  HAL_GPIO_WritePin(ENC_CS2_GPIO_Port, ENC_CS2_Pin, GPIO_PIN_RESET);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeout);
+  HAL_GPIO_WritePin(ENC_CS2_GPIO_Port, ENC_CS2_Pin, GPIO_PIN_SET);
+  angleSensor=rxData[0] | rxData[1] <<8;
+  return angleSensor;
+}
+
 void ps_sample(EncoderStruct * encoder, float dt){
 	/* updates EncoderStruct encoder with the latest sample
 	 * after elapsed time dt */

@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -110,8 +110,5 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 }
 
 /* USER CODE BEGIN 1 */
-int __io_putchar(int ch) {
-		HAL_UART_Transmit(&huart2, (uint8_t*)&ch, 1, 0xffff);
-return 0;
-}
+
 /* USER CODE END 1 */

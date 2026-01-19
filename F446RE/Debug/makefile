@@ -60,8 +60,8 @@ all: main-build
 main-build: F446RE.elf secondary-outputs
 
 # Tool invocations
-F446RE.elf F446RE.map: $(OBJS) $(USER_OBJS) C:\Users\yusha\Repositories\DashMotorControl\Firmware\DashMotorControl\F446RE\STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "F446RE.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\yusha\Repositories\DashMotorControl\Firmware\DashMotorControl\F446RE\STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="F446RE.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+F446RE.elf F446RE.map: $(OBJS) $(USER_OBJS) /home/simon/Repositories/DashMotorControl/F446RE/STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "F446RE.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/home/simon/Repositories/DashMotorControl/F446RE/STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="F446RE.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
