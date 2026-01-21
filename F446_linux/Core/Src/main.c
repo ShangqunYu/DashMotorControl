@@ -70,7 +70,17 @@ uint8_t count = 0;
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
+	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_5);
 	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
+}
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if (GPIO_Pin == GPIO_PIN_2){
+		TxData[0] = 100;
+		TxData[1] = 10;
+		HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+	}
 }
 /* USER CODE END 0 */
 
@@ -112,16 +122,16 @@ int main(void)
 
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
-  TxHeader.DLC = 1;
-  TxHeader.ExtId = 0;
+  TxHeader.DLC = 8;
+//  TxHeader.ExtId = 0;
   TxHeader.IDE = CAN_ID_STD;
   TxHeader.RTR = CAN_RTR_DATA;
   TxHeader.StdId = 0x103;
-  TxHeader.TransmitGlobalTime = DISABLE;
+//  TxHeader.TransmitGlobalTime = DISABLE;
 
   TxData[0] = 0xf3;
 
-  HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+//  HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
 
   /* USER CODE END 2 */
 
@@ -132,13 +142,20 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_Delay(300); // wait for 1 sec
+	  HAL_Delay(100); // wait for 1 sec
 	  uint16_t test = 0;
 	  test = readMagAlphaAngle();
 	  float angle_deg = (test * 360.0f) / ENC_CPR;
 
 	  printf("raw = %u, angle = %u deg\r\n", test, (uint16_t) angle_deg);
-	  HAL_Delay(300); // wait for 1 se
+	  TxData[0] = (uint8_t) angle_deg;
+//	  if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+//	  {
+//	     Error_Handler ();
+//	  }
+//	  HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+//	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_5);
+	  HAL_Delay(100); // wait for 1 se
   }
   /* USER CODE END 3 */
 }
@@ -211,6 +228,7 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+	  printf("having error \r\n");
   }
   /* USER CODE END Error_Handler_Debug */
 }
