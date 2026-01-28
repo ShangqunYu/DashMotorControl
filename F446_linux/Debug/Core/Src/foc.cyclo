@@ -1,0 +1,16 @@
+../Core/Src/foc.c:16:6:set_dtc	2
+../Core/Src/foc.c:43:6:analog_sample	2
+../Core/Src/foc.c:70:6:abc	1
+../Core/Src/foc.c:84:6:dq0	1
+../Core/Src/foc.c:97:6:svm	1
+../Core/Src/foc.c:110:6:zero_current	2
+../Core/Src/foc.c:131:6:init_controller_params	3
+../Core/Src/foc.c:150:6:reset_foc	1
+../Core/Src/foc.c:169:6:reset_observer	1
+../Core/Src/foc.c:177:6:update_observer	1
+../Core/Src/foc.c:209:7:linearize_dtc	1
+../Core/Src/foc.c:218:6:field_weaken	3
+../Core/Src/foc.c:231:6:commutate	2
+../Core/Src/foc.c:291:6:torque_control	2
+../Core/Src/foc.c:302:6:zero_commands	1
+../Core/Src/foc.c:311:6:openLoopControl	1

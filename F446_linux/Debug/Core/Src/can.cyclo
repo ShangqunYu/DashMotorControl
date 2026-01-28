@@ -1,3 +1,7 @@
-../Core/Src/can.c:30:6:MX_CAN1_Init	2
-../Core/Src/can.c:76:6:HAL_CAN_MspInit	2
-../Core/Src/can.c:111:6:HAL_CAN_MspDeInit	2
+../Core/Src/can.c:32:6:MX_CAN1_Init	2
+../Core/Src/can.c:78:6:HAL_CAN_MspInit	2
+../Core/Src/can.c:113:6:HAL_CAN_MspDeInit	2
+../Core/Src/can.c:140:6:can_rx_init	1
+../Core/Src/can.c:152:6:can_tx_init	1
+../Core/Src/can.c:159:6:pack_reply	1
+../Core/Src/can.c:173:6:unpack_cmd	1

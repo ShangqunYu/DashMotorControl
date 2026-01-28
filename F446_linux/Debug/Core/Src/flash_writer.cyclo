@@ -1,0 +1,10 @@
+../Core/Src/flash_writer.c:12:6:flash_writer_init	2
+../Core/Src/flash_writer.c:18:6:flash_writer_ready	1
+../Core/Src/flash_writer.c:22:6:flash_writer_open	1
+../Core/Src/flash_writer.c:29:6:flash_writer_write_int	1
+../Core/Src/flash_writer.c:36:6:flash_writer_write_uint	1
+../Core/Src/flash_writer.c:40:6:flash_writer_write_float	1
+../Core/Src/flash_writer.c:47:6:flash_writer_close	1
+../Core/Src/flash_writer.c:52:5:flash_read_int	1
+../Core/Src/flash_writer.c:56:10:flash_read_uint	1
+../Core/Src/flash_writer.c:60:7:flash_read_float	1

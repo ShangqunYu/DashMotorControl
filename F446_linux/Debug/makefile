@@ -61,7 +61,7 @@ main-build: F446_linux.elf secondary-outputs
 
 # Tool invocations
 F446_linux.elf F446_linux.map: $(OBJS) $(USER_OBJS) /home/simon/Repositories/DashMotorControl/F446_linux/STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "F446_linux.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/home/simon/Repositories/DashMotorControl/F446_linux/STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="F446_linux.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "F446_linux.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/home/simon/Repositories/DashMotorControl/F446_linux/STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="F446_linux.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

@@ -6,51 +6,84 @@
   ******************************************************************************
   */
 /* USER CODE END Header */
-
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "can.h"
+#include "spi.h"
+#include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "structs.h"
+#include <stdio.h>
+#include <string.h>
+
+#include "stm32f4xx_flash.h"
+#include "flash_writer.h"
+#include "position_sensor.h"
+#include "preference_writer.h"
+#include "hw_config.h"
+#include "user_config.h"
+#include "fsm.h"
+#include "drv8353.h"
+#include "foc.h"
+#include "math_ops.h"
+#include "calibration.h"
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+#define VERSION_NUM 2.0f
+/* USER CODE END PM */
+
 /* Private variables ---------------------------------------------------------*/
+
 /* USER CODE BEGIN PV */
+/* Flash Registers */
+float __float_reg[64];
+int __int_reg[256];
+PreferenceWriter prefs;
+
+ControllerStruct controller;
+ObserverStruct observer;
+COMStruct com;
+FSMStruct state;
+EncoderStruct comm_encoder;
+DRVStruct drv;
+CalStruct comm_encoder_cal;
+CANTxMessage can_tx;
+CANRxMessage can_rx;
+
+/* init but don't allocate calibration arrays */
+int *error_array = NULL;
+int *lut_array = NULL;
+
+uint8_t Serial2RxBuffer[1];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+/* USER CODE BEGIN PFP */
 
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// CAN transmit structures
-CAN_TxHeaderTypeDef TxHeader;
-uint32_t TxMailbox;
-uint8_t TxData[8];
-uint32_t message_counter = 0;
-
-// Button interrupt callback - runs when button pressed
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-    if (GPIO_Pin == GPIO_PIN_2)  // Button on PA2
-    {
-        // Prepare message: "BTN" + counter
-        TxData[0] = 'B';
-        TxData[1] = 'T';
-        TxData[2] = 'N';
-        TxData[3] = (message_counter >> 24) & 0xFF;
-        TxData[4] = (message_counter >> 16) & 0xFF;
-        TxData[5] = (message_counter >> 8) & 0xFF;
-        TxData[6] = message_counter & 0xFF;
-        TxData[7] = 0x00;
-        
-        // Send CAN message
-        HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
-        
-        // Blink LED to show button was pressed
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_5);  // LED pin
-        
-        message_counter++;
-    }
-}
 
 /* USER CODE END 0 */
 
@@ -60,10 +93,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -77,54 +113,132 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_USART2_UART_Init();
+  MX_SPI3_Init();
   MX_CAN1_Init();
-  
+  MX_ADC1_Init();
+  MX_ADC2_Init();
+  MX_ADC3_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
-  // Start CAN peripheral
-  if (HAL_CAN_Start(&hcan1) != HAL_OK)
-  {
-      Error_Handler();
-  }
+  /* Load settings from flash */
+  preference_writer_init(&prefs, 6);
+  preference_writer_load(prefs);
 
-  // Configure TX Header (message format)
-  TxHeader.DLC = 8;                    // 8 bytes of data
-  TxHeader.IDE = CAN_ID_STD;           // Standard 11-bit ID
-  TxHeader.RTR = CAN_RTR_DATA;         // Data frame (not remote request)
-  TxHeader.StdId = 0x100;              // CAN ID = 0x100
-  TxHeader.TransmitGlobalTime = DISABLE;
+  /* Sanitize configs in case flash is empty*/
+  if(E_ZERO==-1){E_ZERO = 0;}
+  if(M_ZERO==-1){M_ZERO = 0;}
+  if(isnan(I_BW) || I_BW==-1){I_BW = 1000;}
+  if(isnan(I_MAX) || I_MAX ==-1){I_MAX=40;}
+  if(isnan(I_FW_MAX) || I_FW_MAX ==-1){I_FW_MAX=0;}
+  if(CAN_ID==-1){CAN_ID = 1;}
+  if(CAN_MASTER==-1){CAN_MASTER = 0;}
+  if(CAN_TIMEOUT==-1){CAN_TIMEOUT = 1000;}
+  if(isnan(R_NOMINAL) || R_NOMINAL==-1){R_NOMINAL = 0.0f;}
+  if(isnan(TEMP_MAX) || TEMP_MAX==-1){TEMP_MAX = 125.0f;}
+  if(isnan(I_MAX_CONT) || I_MAX_CONT==-1){I_MAX_CONT = 14.0f;}
+  if(isnan(I_CAL)||I_CAL==-1){I_CAL = 2.0f;}
+  I_CAL=5.0f;
+  if(isnan(PPAIRS) || PPAIRS==-1){PPAIRS = 21.0f;}
+  if(isnan(GR) || GR==-1){GR = 1.0f;}
+  if(isnan(KT) || KT==-1){KT = 1.0f;}
+  if(isnan(KP_MAX) || KP_MAX==-1){KP_MAX = 500.0f;}
+  if(isnan(KD_MAX) || KD_MAX==-1){KD_MAX = 5.0f;}
+  if(isnan(P_MAX)){P_MAX = 12.5f;}
+  if(isnan(P_MIN)){P_MIN = -12.5f;}
+  if(isnan(V_MAX)){V_MAX = 65.0f;}
+  if(isnan(V_MIN)){V_MIN = -65.0f;}
 
-  // Initialize message data
-  for (int i = 0; i < 8; i++)
-  {
-      TxData[i] = 0;
-  }
+  printf("\r\nFirmware Version Number: %.2f\r\n", VERSION_NUM);
 
-  // Send a startup message to show board is alive
-  TxData[0] = 'R';
-  TxData[1] = 'D';
-  TxData[2] = 'Y';  // "RDY" = Ready
-  HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
-  
-  // Blink LED to show we're ready
-  for (int i = 0; i < 6; i++)
-  {
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_5);
-      HAL_Delay(100);
-  }
+  init_controller_params(&controller);
+  /* calibration "encoder" zeroing */
+  memset(&comm_encoder_cal.cal_position, 0, sizeof(EncoderStruct));
+
+  /* commutation encoder setup */
+  comm_encoder.m_zero = M_ZERO;
+  comm_encoder.e_zero = E_ZERO;
+  comm_encoder.ppairs = PPAIRS;
+
+  if(EN_ENC_LINEARIZATION){memcpy(&comm_encoder.offset_lut, &ENCODER_LUT, sizeof(comm_encoder.offset_lut));}	// Copy the linearization lookup table
+  else{memset(&comm_encoder.offset_lut, 0, sizeof(comm_encoder.offset_lut));}
+  ps_warmup(&comm_encoder, 100);			// clear the noisy data when the encoder first turns on
+
+  /* Turn on ADCs */
+  HAL_ADC_Start(&hadc1);
+  HAL_ADC_Start(&hadc2);
+  HAL_ADC_Start(&hadc3);
+
+  /* DRV8323 setup */
+  HAL_GPIO_WritePin(DRV_CS, GPIO_PIN_SET ); 	// CS high
+  HAL_GPIO_WritePin(ENABLE_PIN, GPIO_PIN_SET );
+  HAL_Delay(1);
+  drv_write_DCR(drv, 0x0, DIS_GDF_EN, 0x0, PWM_MODE_3X, 0x0, 0x0, 0x0, 0x0, 0x1);
+  HAL_Delay(1);
+  drv_write_HSR(drv, LOCK_OFF, IDRIVEP_HS_300MA, IDRIVEN_HS_200MA);
+  HAL_Delay(1);
+  drv_write_LSR(drv, 1, TDRIVE_1000NS, IDRIVEP_LS_850MA, IDRIVEN_LS_600MA);
+  HAL_Delay(1);
+  int CSA_GAIN;
+  if(I_MAX <= 40.0f){CSA_GAIN = CSA_GAIN_40;}	// Up to 40A use 40X amplifier gain
+  else{CSA_GAIN = CSA_GAIN_20;}					// From 40-60A use 20X amplifier gain.  (Make this generic in the future)
+//  drv_write_CSACR(drv, 0x0, 0x1, 0x0, CSA_GAIN_40, 0x0, 0x1, 0x1, 0x1, SEN_LVL_0_25);
+  drv_write_CSACR(drv, 0x0, 0x1, 0x0, CSA_GAIN, 0x1, 0x0, 0x0, 0x0, SEN_LVL_0_5);
+  HAL_Delay(1);
+  zero_current(&controller);
+  HAL_Delay(1);
+  drv_write_OCPCR(drv, TRETRY_8MS, DEADTIME_50NS, OCP_LATCH, OCP_DEG_4US, VDS_LVL_0_7);
+  HAL_Delay(1);
+  drv_disable_gd(drv);
+  HAL_Delay(1);
+  printf("ADC A OFFSET: %d     ADC B OFFSET: %d\r\n", controller.adc_a_offset, controller.adc_b_offset);
+
+  /* Turn on PWM */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+
+
+  /* CAN setup */
+  can_rx_init(&can_rx);
+  can_tx_init(&can_tx);
+  HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
+
+  /* Set Interrupt Priorities */
+  HAL_NVIC_SetPriority(PWM_ISR, 0x0,0x0); // commutation > communication
+  HAL_NVIC_SetPriority(CAN_ISR, 0x01, 0x01);
+
+  uint16_t value1 = drv_read_register(drv, DCR);
+
+  /* Start the FSM */
+  state.state = MENU_MODE;
+  state.next_state = MENU_MODE;
+  state.ready = 1;
+
+  /* Turn on interrupts */
+  HAL_UART_Receive_IT(&huart2, (uint8_t *)Serial2RxBuffer, 1);
+  HAL_TIM_Base_Start_IT(&htim1);
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  drv_enable_gd(drv);
+  uint16_t angle_reading;
   while (1)
   {
+	  HAL_Delay(100);
+	  drv_print_faults(drv);
+//	  angle_reading = (uint16_t)comm_encoder.angle_singleturn;
+//	  printf("angle: %d\r\n", angle_reading);
+//	  printf("%.3f\n\r", controller.dtheta_mech);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     
     // Main loop does nothing - everything happens in button interrupt
-    HAL_Delay(100);
     
   }
   /* USER CODE END 3 */
@@ -139,9 +253,14 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
+  /** Configure the main internal regulator output voltage
+  */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -156,11 +275,15 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
+  /** Activate the Over-Drive mode
+  */
   if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     Error_Handler();
   }
 
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
@@ -183,17 +306,27 @@ void SystemClock_Config(void)
   */
 void Error_Handler(void)
 {
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
-      // Error - blink LED rapidly
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_5);
-      HAL_Delay(50);
   }
+  /* USER CODE END Error_Handler_Debug */
 }
-
 #ifdef USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
 }
-#endif
+#endif /* USE_FULL_ASSERT */

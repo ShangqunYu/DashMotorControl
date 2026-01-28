@@ -4,7 +4,7 @@ import time
 print("WAITING FOR BUTTON PRESSES FROM STM32")
 print("\nPress the button on your board...\n")
 
-ser = serial.Serial('/dev/tty.usbmodem51593A2D1', 115200, timeout=0.1)
+ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
 
 # Ensure CAN is on
 ser.write(b'can on\n')

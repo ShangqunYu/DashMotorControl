@@ -10,9 +10,9 @@
 
 /* Timer and PWM */
 #define TIM_PWM			htim1				// PWM/ISR timer handle
-#define TIM_CH_U		TIM_CHANNEL_1		// Terminal U timer channel
+#define TIM_CH_W		TIM_CHANNEL_1		// Terminal U timer channel
 #define TIM_CH_V		TIM_CHANNEL_2		// Terminal V timer channel
-#define TIM_CH_W		TIM_CHANNEL_3		// Terminal W timer channel
+#define TIM_CH_U		TIM_CHANNEL_3		// Terminal W timer channel
 #define INVERT_DTC		1					// PWM inverting (1) or non-inverting (0)
 
 /* ISRs */
@@ -53,7 +53,7 @@
 #define DTC_COMP 			0.000f          // deadtime compensation (100 ns / 25 us)
 #define DT					.000025f		// Loop period
 #define EN_ENC_LINEARIZATION 1				// Enable/disable encoder linearization
-#define V_BUS_MAX			40.0f			// max drive voltage (faults above this)
+#define V_BUS_MAX			60.0f			// max drive voltage (faults above this)
 
 /* Current controller */
 #define L_D .00004f				// D axis inductance
