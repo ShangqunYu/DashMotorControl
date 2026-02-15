@@ -52,7 +52,7 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+int count = 0;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -205,13 +205,9 @@ void SysTick_Handler(void)
 void TIM1_UP_TIM10_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 0 */
-//	printf("hello world \n\r");
-	test += 0.01;
-  //mod by 100 to keep number small
-  if (test >= 5) {
-      test = 0;
-  }
-	send_float(test);
+
+  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_5);
+
 
   /* USER CODE END TIM1_UP_TIM10_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);

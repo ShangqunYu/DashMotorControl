@@ -66,6 +66,8 @@
 				 zero_commands(&controller);
 			 }
 			 /* Otherwise, commutate */
+			 controller.v_des = 24.0f;
+			 controller.kd = 0.5f;
 			 torque_control(&controller);
 			 field_weaken(&controller);
 			 commutate(&controller, &comm_encoder);
