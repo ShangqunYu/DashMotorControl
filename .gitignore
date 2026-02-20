@@ -1,0 +1,6 @@
+.settings/
+*.launch
+*.prefs
+Debug/
+Release/
+build/
