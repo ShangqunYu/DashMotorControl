@@ -1,7 +1,7 @@
 import serial
 import time
 
-ser = serial.Serial('/dev/tty.usbmodem51593A2D1', 115200, timeout=1)
+ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
 
 commands = [
     'can off',
