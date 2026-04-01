@@ -46,7 +46,7 @@ extern CAN_HandleTypeDef hcan1;
 #define T_MIN -18.0f
 #define T_MAX 18.0f
 #define VB_MIN 0.0f
-#define VB_MAX 40.0f
+#define VB_MAX 60.0f
 #define SENSE_BUFFER 0.0f
 /* USER CODE END Private defines */
 

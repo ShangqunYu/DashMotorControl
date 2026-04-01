@@ -38,6 +38,7 @@ void ps_sample(EncoderStruct * encoder, float dt){
 	while( ENC_SPI.State == HAL_SPI_STATE_BUSY );  					// wait for transmission complete
 	HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET ); 	// CS high
 	encoder->raw = encoder ->spi_rx_word;
+	// encoder->raw = encoder->spi_rx_word & 0xFFF0;
 
 	/* Linearization */
 	int off_1 = encoder->offset_lut[(encoder->raw)>>9];				// lookup table lower entry
@@ -74,6 +75,9 @@ void ps_sample(EncoderStruct * encoder, float dt){
 
 	/* Velocity */
 	encoder->velocity = (encoder->angle_multiturn[0] - encoder->angle_multiturn[N_POS_SAMPLES-1])/(dt*(float)(N_POS_SAMPLES-1));
+	if (encoder->velocity > 2.0f) {
+		printf("High velocity detected: %f\r\n", encoder->velocity);
+	}
 	encoder->elec_velocity = encoder->ppairs*encoder->velocity;
 
 }

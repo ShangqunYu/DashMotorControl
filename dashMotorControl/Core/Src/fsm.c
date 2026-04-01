@@ -64,11 +64,11 @@
 			 /* If CAN has timed out, reset all commands */
 			 if((CAN_TIMEOUT > 0 ) && (controller.timeout > CAN_TIMEOUT)){
 				// Simon: comment out for now since I don't have CAN set up, but this should be uncommented for safety if CAN is being used
-				//  zero_commands(&controller); 
+				 zero_commands(&controller); 
 			 }
 			 /* Otherwise, commutate */
-			 controller.v_des = 5.0f;
-			 controller.kd = 0.5f;
+			//  controller.v_des = 5.0f;
+			//  controller.kd = 0.5f;
 			 torque_control(&controller);
 			 field_weaken(&controller);
 			 commutate(&controller, &comm_encoder);

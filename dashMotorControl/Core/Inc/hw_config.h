@@ -70,4 +70,6 @@
 #define D_INT_LIM V_BUS/(K_D*KI_D)  // Amps*samples
 #define Q_INT_LIM V_BUS/(K_Q*KI_Q)  // Amps*samples
 
+#define FILTER_MASK 0b00000000000000000000011111111
+
 #endif /* INC_HW_CONFIG_H_ */

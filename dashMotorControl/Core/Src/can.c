@@ -24,6 +24,7 @@
 #include "hw_config.h"
 #include "user_config.h"
 #include "math_ops.h"
+#include <stdio.h>
 /* USER CODE END 0 */
 
 CAN_HandleTypeDef hcan1;
@@ -60,10 +61,11 @@ void MX_CAN1_Init(void)
   canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
   canfilterconfig.FilterBank = 10;
   canfilterconfig.FilterFIFOAssignment = CAN_RX_FIFO0;
-  canfilterconfig.FilterIdHigh = 0;
-  canfilterconfig.FilterIdLow  = 0x0000;
-  canfilterconfig.FilterMaskIdHigh = 0;
-  canfilterconfig.FilterMaskIdLow = 0x0000;
+  canfilterconfig.FilterIdHigh = CAN_ID >> 13 & 0xFFFF;
+  canfilterconfig.FilterIdLow  = CAN_ID << 3 & 0xFFF8;
+  canfilterconfig.FilterMaskIdHigh = FILTER_MASK >> 13 & 0xFFFF;
+  canfilterconfig.FilterMaskIdLow = FILTER_MASK << 3 & 0xFFF8;
+
   canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
   canfilterconfig.FilterScale=CAN_FILTERSCALE_32BIT;
   canfilterconfig.SlaveStartFilterBank = 0;
@@ -137,7 +139,7 @@ void can_rx_init(CANRxMessage *msg){
 	// msg->filter.FilterFIFOAssignment=CAN_FILTER_FIFO0; 	// set fifo assignment
 	// msg->filter.FilterIdHigh=CAN_ID<<5; 				// CAN ID
 	// msg->filter.FilterIdLow=0x0;
-	// msg->filter.FilterMaskIdHigh=0xFFF;
+	// msg->filter.FilterMaskIdHigh=0x7FFU <<5; 			// filter for CAN ID
 	// msg->filter.FilterMaskIdLow=0;
 	// msg->filter.FilterMode = CAN_FILTERMODE_IDMASK;
 	// msg->filter.FilterScale=CAN_FILTERSCALE_32BIT;
@@ -178,9 +180,7 @@ void unpack_cmd(CANRxMessage msg, float *commands){// ControllerStruct * control
         commands[2] = uint_to_float(kp_int, KP_MIN, KP_MAX, 12);
         commands[3] = uint_to_float(kd_int, KD_MIN, KD_MAX, 12);
         commands[4] = uint_to_float(t_int, -I_MAX*KT*GR, I_MAX*KT*GR, 12);
-    //printf("Received   ");
-    //printf("%.3f  %.3f  %.3f  %.3f  %.3f   %.3f", controller->p_des, controller->v_des, controller->kp, controller->kd, controller->t_ff, controller->i_q_ref);
-    //printf("\n\r");
+    // printf("Received %.3f  %.3f  %.3f  %.3f  %.3f\r\n", commands[0], commands[1], commands[2], commands[3], commands[4]);
     }
 /* USER CODE END 1 */
 
