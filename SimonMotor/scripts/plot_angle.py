@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import math
 import re
 import sys
 import time
@@ -47,20 +48,27 @@ def main():
     angles = deque(maxlen=args.window)
     rpm_times = deque(maxlen=args.window)
     rpms = deque(maxlen=args.window)
+    rad_s_times = deque(maxlen=args.window)
+    rad_s_values = deque(maxlen=args.window)
     start_time = time.time()
 
-    fig, (ax_angle, ax_rpm) = plt.subplots(2, 1, sharex=True)
+    fig, (ax_angle, ax_rpm, ax_rad_s) = plt.subplots(3, 1, sharex=True)
     angle_line, = ax_angle.plot([], [], lw=2)
     rpm_line, = ax_rpm.plot([], [], lw=2, color="tab:red")
+    rad_s_line, = ax_rad_s.plot([], [], lw=2, color="tab:green")
 
     ax_angle.set_title("Motor Angle")
     ax_angle.set_ylabel("Angle (deg)")
     ax_angle.grid(True)
 
     ax_rpm.set_title("Motor Speed")
-    ax_rpm.set_xlabel("Time (s)")
     ax_rpm.set_ylabel("RPM")
     ax_rpm.grid(True)
+
+    ax_rad_s.set_title("Motor Speed")
+    ax_rad_s.set_xlabel("Time (s)")
+    ax_rad_s.set_ylabel("rad/s")
+    ax_rad_s.grid(True)
 
     def update(_frame):
         while ser.in_waiting:
@@ -74,11 +82,14 @@ def main():
 
             rpm_match = RPM_PATTERN.search(raw_line)
             if rpm_match:
+                rpm_value = float(rpm_match.group(1))
                 rpm_times.append(elapsed)
-                rpms.append(float(rpm_match.group(1)))
+                rpms.append(rpm_value)
+                rad_s_times.append(elapsed)
+                rad_s_values.append(rpm_value * 2.0 * math.pi / 60.0)
 
         if not angle_times and not rpm_times:
-            return (angle_line, rpm_line)
+            return (angle_line, rpm_line, rad_s_line)
 
         if angle_times:
             angle_line.set_data(angle_times, angles)
@@ -103,6 +114,17 @@ def main():
                 rpm_pad = max((rpm_max - rpm_min) * 0.1, 1.0)
             ax_rpm.set_ylim(rpm_min - rpm_pad, rpm_max + rpm_pad)
 
+        if rad_s_times:
+            rad_s_line.set_data(rad_s_times, rad_s_values)
+
+            rad_s_min = min(rad_s_values)
+            rad_s_max = max(rad_s_values)
+            if rad_s_min == rad_s_max:
+                rad_s_pad = 1.0
+            else:
+                rad_s_pad = max((rad_s_max - rad_s_min) * 0.1, 1.0)
+            ax_rad_s.set_ylim(rad_s_min - rad_s_pad, rad_s_max + rad_s_pad)
+
         x_start_candidates = []
         x_end_candidates = []
         if angle_times:
@@ -111,13 +133,16 @@ def main():
         if rpm_times:
             x_start_candidates.append(rpm_times[0])
             x_end_candidates.append(rpm_times[-1])
+        if rad_s_times:
+            x_start_candidates.append(rad_s_times[0])
+            x_end_candidates.append(rad_s_times[-1])
 
         if x_start_candidates and x_end_candidates:
             x_start = min(x_start_candidates)
             x_end = max(x_end_candidates)
-            ax_rpm.set_xlim(x_start, max(x_end, x_start + 1e-3))
+            ax_rad_s.set_xlim(x_start, max(x_end, x_start + 1e-3))
 
-        return (angle_line, rpm_line)
+        return (angle_line, rpm_line, rad_s_line)
 
     def on_close(_event):
         ser.close()

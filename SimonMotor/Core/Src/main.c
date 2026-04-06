@@ -76,6 +76,7 @@ static volatile uint16_t encoder_last_word = 0U;
 bool pose_ready = false;
 float angle_deg = 0.0f;
 float rpm = 0.0f;
+float voltage = 0.0f;
 MA732_t encd;
 /* USER CODE END PV */
 
@@ -100,6 +101,20 @@ void startEncoderRead(void)
                               (uint8_t *)&encoder_spi_tx.buff,
                               (uint8_t *)&encoder_spi_rx.buff,
                               1);
+}
+
+
+float get_power_voltage(void) {
+	static float pv_filtered = 0.0f;
+  const float filter_alpha = 0.2f; 
+
+	// convert to volt
+	float pv = (float)ADC3->JDR1 * V_SCALE;
+
+  // Low-pass filter for noise reduction
+	pv_filtered = (1.0f - filter_alpha) * pv_filtered + filter_alpha * pv;
+
+	return pv_filtered;
 }
 
 /* USER CODE END 0 */
@@ -327,9 +342,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if (hadc->Instance == ADC3) {
     rpm = MA732_get_rpm(&encd, FOC_TS);
     MA732_start(&encd);
+    voltage= get_power_voltage();
 	}
-  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
-  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
+  // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
+  // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
   // printf("ADC3 injected conversion complete\r\n");
   // flip PA_4
   
