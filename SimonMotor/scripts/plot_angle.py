@@ -13,11 +13,15 @@ import serial
 
 ANGLE_PATTERN = re.compile(r"Angle:\s*([-+]?\d+(?:\.\d+)?)")
 RPM_PATTERN = re.compile(r"RPM:\s*([-+]?\d+(?:\.\d+)?)")
+VOLTAGE_PATTERN = re.compile(r"Voltage:\s*([-+]?\d+(?:\.\d+)?)")
+CURRENT_U_PATTERN = re.compile(r"Current U:\s*([-+]?\d+(?:\.\d+)?)")
+CURRENT_V_PATTERN = re.compile(r"Current V:\s*([-+]?\d+(?:\.\d+)?)")
+CURRENT_W_PATTERN = re.compile(r"Current W:\s*([-+]?\d+(?:\.\d+)?)")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Read angle and RPM values from serial and plot them live."
+        description="Read angle, speed, voltage, and phase currents from serial and plot them live."
     )
     parser.add_argument("port", help="Serial port, for example COM5 or /dev/ttyUSB0")
     parser.add_argument(
@@ -50,12 +54,24 @@ def main():
     rpms = deque(maxlen=args.window)
     rad_s_times = deque(maxlen=args.window)
     rad_s_values = deque(maxlen=args.window)
+    voltage_times = deque(maxlen=args.window)
+    voltages = deque(maxlen=args.window)
+    current_u_times = deque(maxlen=args.window)
+    current_u_values = deque(maxlen=args.window)
+    current_v_times = deque(maxlen=args.window)
+    current_v_values = deque(maxlen=args.window)
+    current_w_times = deque(maxlen=args.window)
+    current_w_values = deque(maxlen=args.window)
     start_time = time.time()
 
-    fig, (ax_angle, ax_rpm, ax_rad_s) = plt.subplots(3, 1, sharex=True)
+    fig, (ax_angle, ax_rpm, ax_rad_s, ax_voltage, ax_current) = plt.subplots(5, 1, sharex=True)
     angle_line, = ax_angle.plot([], [], lw=2)
     rpm_line, = ax_rpm.plot([], [], lw=2, color="tab:red")
     rad_s_line, = ax_rad_s.plot([], [], lw=2, color="tab:green")
+    voltage_line, = ax_voltage.plot([], [], lw=2, color="tab:orange")
+    current_u_line, = ax_current.plot([], [], lw=2, color="tab:blue", label="Current U")
+    current_v_line, = ax_current.plot([], [], lw=2, color="tab:purple", label="Current V")
+    current_w_line, = ax_current.plot([], [], lw=2, color="tab:brown", label="Current W")
 
     ax_angle.set_title("Motor Angle")
     ax_angle.set_ylabel("Angle (deg)")
@@ -69,6 +85,16 @@ def main():
     ax_rad_s.set_xlabel("Time (s)")
     ax_rad_s.set_ylabel("rad/s")
     ax_rad_s.grid(True)
+
+    ax_voltage.set_title("Bus Voltage")
+    ax_voltage.set_ylabel("Voltage (V)")
+    ax_voltage.grid(True)
+
+    ax_current.set_title("Phase Currents")
+    ax_current.set_xlabel("Time (s)")
+    ax_current.set_ylabel("Current (A)")
+    ax_current.grid(True)
+    ax_current.legend(loc="upper right")
 
     def update(_frame):
         while ser.in_waiting:
@@ -87,9 +113,33 @@ def main():
                 rpms.append(rpm_value)
                 rad_s_times.append(elapsed)
                 rad_s_values.append(rpm_value * 2.0 * math.pi / 60.0)
+                continue
 
-        if not angle_times and not rpm_times:
-            return (angle_line, rpm_line, rad_s_line)
+            voltage_match = VOLTAGE_PATTERN.search(raw_line)
+            if voltage_match:
+                voltage_times.append(elapsed)
+                voltages.append(float(voltage_match.group(1)))
+                continue
+
+            current_u_match = CURRENT_U_PATTERN.search(raw_line)
+            if current_u_match:
+                current_u_times.append(elapsed)
+                current_u_values.append(float(current_u_match.group(1)))
+                continue
+
+            current_v_match = CURRENT_V_PATTERN.search(raw_line)
+            if current_v_match:
+                current_v_times.append(elapsed)
+                current_v_values.append(float(current_v_match.group(1)))
+                continue
+
+            current_w_match = CURRENT_W_PATTERN.search(raw_line)
+            if current_w_match:
+                current_w_times.append(elapsed)
+                current_w_values.append(float(current_w_match.group(1)))
+
+        if not angle_times and not rpm_times and not voltage_times and not current_u_times and not current_v_times and not current_w_times:
+            return (angle_line, rpm_line, rad_s_line, voltage_line, current_u_line, current_v_line, current_w_line)
 
         if angle_times:
             angle_line.set_data(angle_times, angles)
@@ -125,6 +175,37 @@ def main():
                 rad_s_pad = max((rad_s_max - rad_s_min) * 0.1, 1.0)
             ax_rad_s.set_ylim(rad_s_min - rad_s_pad, rad_s_max + rad_s_pad)
 
+        if voltage_times:
+            voltage_line.set_data(voltage_times, voltages)
+
+            voltage_min = min(voltages)
+            voltage_max = max(voltages)
+            if voltage_min == voltage_max:
+                voltage_pad = 1.0
+            else:
+                voltage_pad = max((voltage_max - voltage_min) * 0.1, 1.0)
+            ax_voltage.set_ylim(voltage_min - voltage_pad, voltage_max + voltage_pad)
+
+        current_series = []
+        if current_u_times:
+            current_u_line.set_data(current_u_times, current_u_values)
+            current_series.extend(current_u_values)
+        if current_v_times:
+            current_v_line.set_data(current_v_times, current_v_values)
+            current_series.extend(current_v_values)
+        if current_w_times:
+            current_w_line.set_data(current_w_times, current_w_values)
+            current_series.extend(current_w_values)
+
+        if current_series:
+            current_min = min(current_series)
+            current_max = max(current_series)
+            if current_min == current_max:
+                current_pad = 1.0
+            else:
+                current_pad = max((current_max - current_min) * 0.1, 1.0)
+            ax_current.set_ylim(current_min - current_pad, current_max + current_pad)
+
         x_start_candidates = []
         x_end_candidates = []
         if angle_times:
@@ -136,13 +217,25 @@ def main():
         if rad_s_times:
             x_start_candidates.append(rad_s_times[0])
             x_end_candidates.append(rad_s_times[-1])
+        if voltage_times:
+            x_start_candidates.append(voltage_times[0])
+            x_end_candidates.append(voltage_times[-1])
+        if current_u_times:
+            x_start_candidates.append(current_u_times[0])
+            x_end_candidates.append(current_u_times[-1])
+        if current_v_times:
+            x_start_candidates.append(current_v_times[0])
+            x_end_candidates.append(current_v_times[-1])
+        if current_w_times:
+            x_start_candidates.append(current_w_times[0])
+            x_end_candidates.append(current_w_times[-1])
 
         if x_start_candidates and x_end_candidates:
             x_start = min(x_start_candidates)
             x_end = max(x_end_candidates)
-            ax_rad_s.set_xlim(x_start, max(x_end, x_start + 1e-3))
+            ax_current.set_xlim(x_start, max(x_end, x_start + 1e-3))
 
-        return (angle_line, rpm_line, rad_s_line)
+        return (angle_line, rpm_line, rad_s_line, voltage_line, current_u_line, current_v_line, current_w_line)
 
     def on_close(_event):
         ser.close()

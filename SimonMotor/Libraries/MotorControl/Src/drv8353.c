@@ -5,7 +5,6 @@
  *      Author: simon
  */
 
-
 #include "drv8353.h"
 #include <stdio.h>
 #include "usart.h"

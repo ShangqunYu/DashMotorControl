@@ -77,6 +77,17 @@ bool pose_ready = false;
 float angle_deg = 0.0f;
 float rpm = 0.0f;
 float voltage = 0.0f;
+float I_u = 0.0f;
+float I_v = 0.0f;
+float I_w = 0.0f;
+float i_scale = 0.0201416f;
+int adc_a_offset = 2048;
+int adc_b_offset = 2048;
+static volatile uint8_t adc_offset_calibrating = 0U;
+static volatile uint32_t adc_a_offset_sum = 0U;
+static volatile uint32_t adc_b_offset_sum = 0U;
+static volatile uint32_t adc_offset_sample_count = 0U;
+
 MA732_t encd;
 /* USER CODE END PV */
 
@@ -115,6 +126,40 @@ float get_power_voltage(void) {
 	pv_filtered = (1.0f - filter_alpha) * pv_filtered + filter_alpha * pv;
 
 	return pv_filtered;
+}
+
+void get_current(void){
+  float i_u = ((float)ADC1->JDR1 - adc_a_offset) * i_scale;
+  float i_v = ((float)ADC2->JDR1 - adc_b_offset) * i_scale;
+  float i_w = -i_u - i_v; // Assuming sum of currents is zero
+
+  I_u = i_u;
+  I_v = i_v;
+  I_w = i_w;
+
+}
+
+void calibrate_adc_offsets(uint32_t duration_ms)
+{
+  uint32_t start_tick = HAL_GetTick();
+
+  adc_offset_calibrating = 1U;
+  adc_a_offset_sum = 0U;
+  adc_b_offset_sum = 0U;
+  adc_offset_sample_count = 0U;
+
+  while ((HAL_GetTick() - start_tick) < duration_ms)
+  {
+    HAL_Delay(1);
+  }
+
+  adc_offset_calibrating = 0U;
+
+  if (adc_offset_sample_count > 0U)
+  {
+    adc_a_offset = (int)(adc_a_offset_sum / adc_offset_sample_count);
+    adc_b_offset = (int)(adc_b_offset_sum / adc_offset_sample_count);
+  }
 }
 
 /* USER CODE END 0 */
@@ -228,9 +273,9 @@ int main(void)
   uint32_t offset = (uint32_t)(2.5f * 180);
   htim1.Instance->CCR4 = htim1.Instance->ARR - offset;
   // set PWM duty cycle to 90% to test
-  htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.95f);
-  htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.95f);
-  htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.95f);
+  // htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.95f);
+  // htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.95f);
+  // htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.95f);
 
   	// current sensor
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
@@ -241,14 +286,36 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  drv_enable_gd(drv);
+  htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.0f);
+  htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.0f);
+  htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.0f);
+  calibrate_adc_offsets(1000U);
+  printf("ADC offsets: A=%d, B=%d\r\n", adc_a_offset, adc_b_offset);
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    uint32_t ramp_tick = HAL_GetTick() % 20000U;
+    uint32_t max_compare = htim1.Init.Period / 64U;
+    uint32_t compare_value;
+
     // motor_pid_output = MotorControl_UpdatePid(&motor_pid, 1000.0f, 950.0f, 0.001f);
     HAL_Delay(10);
-
+    drv_print_faults(drv);
+    // htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.4f);
+    // htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.1f);
+    // htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.1f);
+    if (ramp_tick < 10000U)
+    {
+      compare_value = (max_compare * ramp_tick) / 10000U;
+    }
+    else
+    {
+      compare_value = (max_compare * (20000U - ramp_tick)) / 10000U;
+    }
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, compare_value);
     // printf("spi_rx_buff: %u\r\n", encoder_last_word);
     if (pose_ready)
     {
@@ -256,6 +323,10 @@ int main(void)
       // encoder_last_word = encoder_spi_rx.word & 0xFFF0;
       printf("Angle: %.2f\r\n", angle_deg);
       printf("RPM: %.2f\r\n", rpm);
+      printf("Voltage: %.2f\r\n", voltage);
+      printf("Current U: %.2f A\r\n", I_u);
+      printf("Current V: %.2f A\r\n", I_v);
+      printf("Current W: %.2f A\r\n", I_w);
       pose_ready = false;
       // startEncoderRead();
 
@@ -340,9 +411,16 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if (hadc->Instance == ADC2) {
   }
 	if (hadc->Instance == ADC3) {
+    if (adc_offset_calibrating != 0U)
+    {
+      adc_a_offset_sum += ADC1->JDR1;
+      adc_b_offset_sum += ADC2->JDR1;
+      adc_offset_sample_count++;
+    }
     rpm = MA732_get_rpm(&encd, FOC_TS);
     MA732_start(&encd);
     voltage= get_power_voltage();
+    get_current();
 	}
   // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
   // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
