@@ -72,4 +72,13 @@
 
 #define FILTER_MASK 0b00000000000000000000011111111
 
+
+#define POLE_PAIR 7
+#define KV 330.0f
+
+#define VD_CAL 0.6f
+#define VQ_CAL 0.0f
+
+#define CURRENT_FILTER_ALPHA 0.466512f
+
 #endif /* INC_HW_CONFIG_H_ */

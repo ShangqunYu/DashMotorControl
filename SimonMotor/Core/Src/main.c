@@ -38,6 +38,8 @@
 #include "drv8353.h"
 #include <stdio.h>
 #include "MA732.h"
+#include "foc.h"
+#include "pid_utils.h"
 #define BLDC_PWM_FREQ 10000
 #define FOC_TS (1.0f / (float)BLDC_PWM_FREQ)
 /* USER CODE END Includes */
@@ -64,8 +66,9 @@ float __float_reg[64];
 int __int_reg[256];
 PreferenceWriter prefs;
 static MotorControlPid_t motor_pid;
-static float motor_pid_output = 0.0f;
 DRVStruct drv;
+foc_t hfoc;
+
 static union
 {
     uint8_t buff[2];
@@ -74,21 +77,7 @@ static union
 static volatile uint16_t encoder_last_word = 0U;
 
 bool pose_ready = false;
-float angle_deg = 0.0f;
 float rpm = 0.0f;
-float voltage = 0.0f;
-float I_u = 0.0f;
-float I_v = 0.0f;
-float I_w = 0.0f;
-float i_scale = 0.0201416f;
-int adc_a_offset = 2048;
-int adc_b_offset = 2048;
-static volatile uint8_t adc_offset_calibrating = 0U;
-static volatile uint32_t adc_a_offset_sum = 0U;
-static volatile uint32_t adc_b_offset_sum = 0U;
-static volatile uint32_t adc_offset_sample_count = 0U;
-
-MA732_t encd;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -99,20 +88,6 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void startEncoderRead(void)
-{
-  if (HAL_SPI_GetState(&ENC_SPI) != HAL_SPI_STATE_READY)
-  {
-    return;
-  }
-
-  encoder_spi_tx.word = ENC_READ_WORD;
-  HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive_DMA(&ENC_SPI,
-                              (uint8_t *)&encoder_spi_tx.buff,
-                              (uint8_t *)&encoder_spi_rx.buff,
-                              1);
-}
 
 
 float get_power_voltage(void) {
@@ -128,38 +103,29 @@ float get_power_voltage(void) {
 	return pv_filtered;
 }
 
-void get_current(void){
-  float i_u = ((float)ADC1->JDR1 - adc_a_offset) * i_scale;
-  float i_v = ((float)ADC2->JDR1 - adc_b_offset) * i_scale;
-  float i_w = -i_u - i_v; // Assuming sum of currents is zero
 
-  I_u = i_u;
-  I_v = i_v;
-  I_w = i_w;
+static void foc_loop(void) {
 
-}
+  hfoc.v_bus = get_power_voltage();
 
-void calibrate_adc_offsets(uint32_t duration_ms)
-{
-  uint32_t start_tick = HAL_GetTick();
 
-  adc_offset_calibrating = 1U;
-  adc_a_offset_sum = 0U;
-  adc_b_offset_sum = 0U;
-  adc_offset_sample_count = 0U;
-
-  while ((HAL_GetTick() - start_tick) < duration_ms)
-  {
-    HAL_Delay(1);
+  switch(hfoc.control_mode) {
+    case TORQUE_CONTROL_MODE:
+      hfoc.id_ref = 0.0f;
+      hfoc.iq_ref = 0.5f; // Set a constant torque reference for testing
+      foc_current_control_update(&hfoc, FOC_TS);
+      break;
+    case SPEED_CONTROL_MODE:
+      break;
+    case POSITION_CONTROL_MODE:
+      break;
+    case POWER_UP_MODE:
+      // open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
+      break;
+    default:
+      break;
   }
-
-  adc_offset_calibrating = 0U;
-
-  if (adc_offset_sample_count > 0U)
-  {
-    adc_a_offset = (int)(adc_a_offset_sum / adc_offset_sample_count);
-    adc_b_offset = (int)(adc_b_offset_sum / adc_offset_sample_count);
-  }
+  
 }
 
 /* USER CODE END 0 */
@@ -258,10 +224,10 @@ int main(void)
   drv_disable_gd(drv);
   HAL_Delay(1);
 
-  MA732_config(&encd, &ENC_SPI);
-  MA732_start(&encd);
+  MA732_config(&hfoc.ma732, &ENC_SPI);
+  MA732_start(&hfoc.ma732);
   HAL_Delay(10);
-  MA732_start(&encd);
+  MA732_start(&hfoc.ma732);
 
     /* Turn on PWM */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -272,12 +238,33 @@ int main(void)
   // uint32_t offset = (uint32_t)((htim1.Instance->ARR+ 1) * 2  / 180 * 2.5);
   uint32_t offset = (uint32_t)(2.5f * 180);
   htim1.Instance->CCR4 = htim1.Instance->ARR - offset;
-  // set PWM duty cycle to 90% to test
-  // htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.95f);
-  // htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.95f);
-  // htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.95f);
+
+  foc_motor_init(&hfoc, POLE_PAIR, 360.0f);
+  foc_sensor_init(&hfoc, 0.0f, NORMAL_DIR);
+  foc_timer_init(&hfoc, &htim1);
+  foc_set_limit_current(&hfoc, 20.0f);
+  init_trig_lut();
+
+  pid_reset(&hfoc.id_ctrl);
+  pid_set_ts(&hfoc.id_ctrl, FOC_TS);
+  pid_set_kp(&hfoc.id_ctrl, 0.2f);
+  pid_set_ki(&hfoc.id_ctrl, 0.1f);
+  // pid_set_ki(&hfoc.id_ctrl, 12.0f);
+  pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
+  pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
+
+
+  pid_reset(&hfoc.iq_ctrl);
+  pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
+  pid_set_kp(&hfoc.iq_ctrl, 0.2f);
+  pid_set_ki(&hfoc.iq_ctrl, 0.1f);
+  // pid_set_ki(&hfoc.iq_ctrl, 12.0f);
+  pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
+  pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
 
   	// current sensor
+  hfoc.control_mode = POWER_UP_MODE;
+  CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), I_SCALE, 2048, 2048);
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
 	// voltage sensor
@@ -286,12 +273,15 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+
   drv_enable_gd(drv);
   htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.0f);
   htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.0f);
   htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.0f);
-  calibrate_adc_offsets(1000U);
-  printf("ADC offsets: A=%d, B=%d\r\n", adc_a_offset, adc_b_offset);
+  CurrentSensor_calibrate(&hfoc.current_sensor, 1000U);
+  printf("ADC offsets: A=%d, B=%d\r\n", hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset);
+  hfoc.control_mode = TORQUE_CONTROL_MODE;
   while (1)
   {
     /* USER CODE END WHILE */
@@ -299,34 +289,25 @@ int main(void)
     /* USER CODE BEGIN 3 */
     uint32_t ramp_tick = HAL_GetTick() % 20000U;
     uint32_t max_compare = htim1.Init.Period / 64U;
-    uint32_t compare_value;
-
+    
     // motor_pid_output = MotorControl_UpdatePid(&motor_pid, 1000.0f, 950.0f, 0.001f);
     HAL_Delay(10);
     drv_print_faults(drv);
-    // htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.4f);
-    // htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.1f);
-    // htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.1f);
-    if (ramp_tick < 10000U)
-    {
-      compare_value = (max_compare * ramp_tick) / 10000U;
-    }
-    else
-    {
-      compare_value = (max_compare * (20000U - ramp_tick)) / 10000U;
-    }
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, compare_value);
+    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
+    printf("i_a: %.3f\r\n", hfoc.current_sensor.ia_filtered);
+    printf("i_b: %.3f\r\n", hfoc.current_sensor.ib_filtered);
+    printf("i_c: %.3f\r\n", hfoc.current_sensor.ic_filtered);
+    printf("id: %.3f\r\n", hfoc.id);
+    printf("id_des: %.3f\r\n", hfoc.id_ref);
+    printf("id_filt: %.3f\r\n", hfoc.id);
+    printf("iq: %.3f\r\n", hfoc.iq);
+    printf("i_q_des: %.3f\r\n", hfoc.iq_ref);
+    printf("i_q_filt: %.3f\r\n", hfoc.iq);
+    // __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, compare_value);
     // printf("spi_rx_buff: %u\r\n", encoder_last_word);
     if (pose_ready)
     {
-      HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
-      // encoder_last_word = encoder_spi_rx.word & 0xFFF0;
-      printf("Angle: %.2f\r\n", angle_deg);
-      printf("RPM: %.2f\r\n", rpm);
-      printf("Voltage: %.2f\r\n", voltage);
-      printf("Current U: %.2f A\r\n", I_u);
-      printf("Current V: %.2f A\r\n", I_v);
-      printf("Current W: %.2f A\r\n", I_w);
+
       pose_ready = false;
       // startEncoderRead();
 
@@ -393,8 +374,8 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
   {
-    angle_deg = MA732_get_degree(&encd);
     pose_ready = true;
+    foc_sensored_calc_electric_angle(&hfoc);
   }
 }
 
@@ -411,16 +392,12 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if (hadc->Instance == ADC2) {
   }
 	if (hadc->Instance == ADC3) {
-    if (adc_offset_calibrating != 0U)
-    {
-      adc_a_offset_sum += ADC1->JDR1;
-      adc_b_offset_sum += ADC2->JDR1;
-      adc_offset_sample_count++;
-    }
-    rpm = MA732_get_rpm(&encd, FOC_TS);
-    MA732_start(&encd);
-    voltage= get_power_voltage();
-    get_current();
+    CurrentSensor_sample_offset(&hfoc.current_sensor);
+    rpm = MA732_get_rpm(&hfoc.ma732, FOC_TS);
+    MA732_start(&hfoc.ma732);
+    hfoc.v_bus = get_power_voltage();
+    // CurrentSensor_update(&hfoc.current_sensor);
+    foc_loop();
 	}
   // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
   // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
