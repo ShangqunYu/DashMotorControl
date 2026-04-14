@@ -131,7 +131,7 @@ typedef struct {
     uint8_t loop_count;
 
 	PID_Controller_t id_ctrl, iq_ctrl;
-
+	PID_Controller_t speed_ctrl;
 	motor_mode_t control_mode;
 
 	float gear_ratio;
@@ -155,6 +155,17 @@ typedef struct {
 	//debug
 	int sample_index;
 	_Bool collect_sample_flag;
+
+	// Calibration state machine
+	enum {
+		CAL_STATE_IDLE,
+		CAL_STATE_SETTLING,
+		CAL_STATE_SAMPLING,
+		CAL_STATE_COMPLETE
+	} cal_state;
+	uint32_t cal_start_time;
+	uint32_t cal_sample_count;
+	float cal_rad_offset_sum;
 }foc_t;
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
 void foc_sensored_calc_electric_angle(foc_t *hfoc);
@@ -162,7 +173,12 @@ void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv);
 void foc_sensor_init(foc_t *hfoc, float m_rad_offset, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);
+void foc_speed_control_update(foc_t *hfoc, float rpm_reference);
+void foc_update_position_velocity(foc_t *hfoc, float Ts);
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad);
 void foc_current_control_update(foc_t *hfoc, float Ts);
+
+void foc_cal_encoder_misalignment_start(foc_t *hfoc);
+void foc_cal_encoder_misalignment_update(foc_t *hfoc, float Ts);
 
 #endif /* FOC_INC_FOC_H_ */

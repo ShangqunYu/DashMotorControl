@@ -15,7 +15,7 @@ from matplotlib.animation import FuncAnimation
 import serial
 
 
-CSV_HEADER = ("iq", "i_q_des", "i_q_filt", "id", "id_des", "id_filt", "i_a", "i_b", "i_c")
+CSV_HEADER = ("iq", "i_q_des", "i_q_filt", "id", "id_des", "id_filt", "i_a", "i_b", "i_c", "m_angle", "e_angle", "rpm", "rpm_ref")
 LABELED_PATTERNS = {
     "iq": re.compile(r"^iq:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "i_q_des": re.compile(r"^i_q_des:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
@@ -26,6 +26,10 @@ LABELED_PATTERNS = {
     "i_a": re.compile(r"^i_a:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "i_b": re.compile(r"^i_b:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "i_c": re.compile(r"^i_c:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
+    "m_angle": re.compile(r"^m_angle:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
+    "e_angle": re.compile(r"^e_angle:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
+    "rpm": re.compile(r"^rpm:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
+    "rpm_ref": re.compile(r"^rpm_ref:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
 }
 
 
@@ -112,6 +116,8 @@ class CurrentPlotter:
         fig_iq, ax_iq = plt.subplots()
         fig_id, ax_id = plt.subplots()
         fig_phase, ax_phase = plt.subplots()
+        fig_angle, ax_angle = plt.subplots()
+        fig_rpm, ax_rpm = plt.subplots()
 
         iq_lines = {
             "iq": ax_iq.plot([], [], label="iq", linewidth=2.0)[0],
@@ -127,6 +133,14 @@ class CurrentPlotter:
             "i_a": ax_phase.plot([], [], label="i_a", linewidth=2.0)[0],
             "i_b": ax_phase.plot([], [], label="i_b", linewidth=2.0, linestyle="--")[0],
             "i_c": ax_phase.plot([], [], label="i_c", linewidth=2.0, linestyle=":")[0],
+        }
+        angle_lines = {
+            "m_angle": ax_angle.plot([], [], label="m_angle", linewidth=2.0)[0],
+            "e_angle": ax_angle.plot([], [], label="e_angle", linewidth=2.0, linestyle="--")[0],
+        }
+        rpm_lines = {
+            "rpm": ax_rpm.plot([], [], label="rpm", linewidth=2.0)[0],
+            "rpm_ref": ax_rpm.plot([], [], label="rpm_ref", linewidth=2.0, linestyle="--")[0],
         }
 
         ax_iq.set_title(f"q-axis Current: {self.port} @ {self.baudrate}")
@@ -147,13 +161,25 @@ class CurrentPlotter:
         ax_phase.grid(True, alpha=0.3)
         ax_phase.legend(loc="upper right")
 
+        ax_angle.set_title(f"Motor Angles: {self.port} @ {self.baudrate}")
+        ax_angle.set_xlabel("Time (s)")
+        ax_angle.set_ylabel("Angle (rad)")
+        ax_angle.grid(True, alpha=0.3)
+        ax_angle.legend(loc="upper right")
+
+        ax_rpm.set_title(f"Motor RPM: {self.port} @ {self.baudrate}")
+        ax_rpm.set_xlabel("Time (s)")
+        ax_rpm.set_ylabel("RPM")
+        ax_rpm.grid(True, alpha=0.3)
+        ax_rpm.legend(loc="upper right")
+
         def update(_frame: int):
             with self.lock:
                 x = list(self.time_data)
                 data = {name: list(values) for name, values in self.series.items()}
 
             if not x:
-                return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values())
+                return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values()) + tuple(angle_lines.values())
 
             for name in iq_lines:
                 iq_lines[name].set_data(x, data[name])
@@ -161,12 +187,18 @@ class CurrentPlotter:
                 id_lines[name].set_data(x, data[name])
             for name in phase_lines:
                 phase_lines[name].set_data(x, data[name])
+            for name in angle_lines:
+                angle_lines[name].set_data(x, data[name])
+            for name in rpm_lines:
+                rpm_lines[name].set_data(x, data[name])
 
             x_min = max(0.0, x[-1] - self.window_seconds)
             x_max = max(self.window_seconds, x[-1])
             ax_iq.set_xlim(x_min, x_max)
             ax_id.set_xlim(x_min, x_max)
             ax_phase.set_xlim(x_min, x_max)
+            ax_angle.set_xlim(x_min, x_max)
+            ax_rpm.set_xlim(x_min, x_max)
 
             iq_values = data["iq"] + data["i_q_des"] + data["i_q_filt"]
             id_values = data["id"] + data["id_des"] + data["id_filt"]
@@ -187,11 +219,25 @@ class CurrentPlotter:
             phase_margin = max(0.5, 0.1 * max(abs(phase_min), abs(phase_max), 1.0))
             ax_phase.set_ylim(phase_min - phase_margin, phase_max + phase_margin)
 
-            return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values())
+            angle_values = data["m_angle"] + data["e_angle"]
+            angle_min = min(angle_values)
+            angle_max = max(angle_values)
+            angle_margin = max(0.1, 0.1 * max(abs(angle_min), abs(angle_max), 1.0))
+            ax_angle.set_ylim(angle_min - angle_margin, angle_max + angle_margin)
+
+            rpm_values = data["rpm"] + data["rpm_ref"]
+            rpm_min = min(rpm_values)
+            rpm_max = max(rpm_values)
+            rpm_margin = max(10.0, 0.1 * max(abs(rpm_min), abs(rpm_max), 1.0))
+            ax_rpm.set_ylim(rpm_min - rpm_margin, rpm_max + rpm_margin) 
+
+            return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values()) + tuple(angle_lines.values()) + tuple(rpm_lines.values())
 
         animation_iq = FuncAnimation(fig_iq, update, interval=50, blit=False, cache_frame_data=False)
         animation_id = FuncAnimation(fig_id, update, interval=50, blit=False, cache_frame_data=False)
         animation_phase = FuncAnimation(fig_phase, update, interval=50, blit=False, cache_frame_data=False)
+        animation_angle = FuncAnimation(fig_angle, update, interval=50, blit=False, cache_frame_data=False)
+        animation_rpm = FuncAnimation(fig_rpm, update, interval=50, blit=False, cache_frame_data=False)
         try:
             plt.show()
         finally:
@@ -199,6 +245,8 @@ class CurrentPlotter:
             _ = animation_iq
             _ = animation_id
             _ = animation_phase
+            _ = animation_angle
+            _ = animation_rpm
 
 
 def parse_args() -> argparse.Namespace:

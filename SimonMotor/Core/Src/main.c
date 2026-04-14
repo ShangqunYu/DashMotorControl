@@ -42,6 +42,8 @@
 #include "pid_utils.h"
 #define BLDC_PWM_FREQ 10000
 #define FOC_TS (1.0f / (float)BLDC_PWM_FREQ)
+#define SPEED_CONTROL_CYCLE	10
+#define SPEED_TS (FOC_TS * SPEED_CONTROL_CYCLE) 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -69,11 +71,7 @@ static MotorControlPid_t motor_pid;
 DRVStruct drv;
 foc_t hfoc;
 
-static union
-{
-    uint8_t buff[2];
-    uint16_t word;
-} encoder_spi_tx, encoder_spi_rx;
+
 static volatile uint16_t encoder_last_word = 0U;
 
 bool pose_ready = false;
@@ -107,20 +105,29 @@ float get_power_voltage(void) {
 static void foc_loop(void) {
 
   hfoc.v_bus = get_power_voltage();
+  CurrentSensor_sample_offset(&hfoc.current_sensor);
 
+  // Update position and velocity (called every FOC cycle)
+  foc_update_position_velocity(&hfoc, FOC_TS);
 
   switch(hfoc.control_mode) {
     case TORQUE_CONTROL_MODE:
       hfoc.id_ref = 0.0f;
-      hfoc.iq_ref = 0.5f; // Set a constant torque reference for testing
+      hfoc.iq_ref = 1.0f; // Set a constant torque reference for testing
       foc_current_control_update(&hfoc, FOC_TS);
       break;
     case SPEED_CONTROL_MODE:
+      hfoc.rpm_ref = 0.0f;
+      foc_speed_control_update(&hfoc, hfoc.rpm_ref);
+      foc_current_control_update(&hfoc, FOC_TS);
       break;
     case POSITION_CONTROL_MODE:
       break;
     case POWER_UP_MODE:
       // open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
+      break;
+    case CALIBRATION_MODE:
+      foc_cal_encoder_misalignment_update(&hfoc, FOC_TS);
       break;
     default:
       break;
@@ -225,9 +232,11 @@ int main(void)
   HAL_Delay(1);
 
   MA732_config(&hfoc.ma732, &ENC_SPI);
-  MA732_start(&hfoc.ma732);
-  HAL_Delay(10);
-  MA732_start(&hfoc.ma732);
+  for (int i=0; i<20; i++) {
+    MA732_start(&hfoc.ma732);
+    HAL_Delay(10);
+  }
+    // MA732_start(&hfoc.ma732);
 
     /* Turn on PWM */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -248,8 +257,7 @@ int main(void)
   pid_reset(&hfoc.id_ctrl);
   pid_set_ts(&hfoc.id_ctrl, FOC_TS);
   pid_set_kp(&hfoc.id_ctrl, 0.2f);
-  pid_set_ki(&hfoc.id_ctrl, 0.1f);
-  // pid_set_ki(&hfoc.id_ctrl, 12.0f);
+  pid_set_ki(&hfoc.id_ctrl, 1.0f);
   pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
   pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
 
@@ -257,10 +265,20 @@ int main(void)
   pid_reset(&hfoc.iq_ctrl);
   pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
   pid_set_kp(&hfoc.iq_ctrl, 0.2f);
-  pid_set_ki(&hfoc.iq_ctrl, 0.1f);
-  // pid_set_ki(&hfoc.iq_ctrl, 12.0f);
+  pid_set_ki(&hfoc.iq_ctrl, 1.0f);
   pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
   pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
+
+  // Speed PID parameter
+  pid_reset(&hfoc.speed_ctrl);
+  pid_set_ts(&hfoc.speed_ctrl, SPEED_TS);
+  pid_set_kp(&hfoc.speed_ctrl, 0.01f);
+  pid_set_ki(&hfoc.speed_ctrl, 0.1f);
+  pid_set_kd(&hfoc.speed_ctrl, 0.0001f);
+  pid_set_d_filter_fc(&hfoc.speed_ctrl, 100.0f);
+  pid_set_max_d(&hfoc.speed_ctrl, 10.0f);
+  pid_set_max_out(&hfoc.speed_ctrl, 10.0f);
+  pid_set_deadband(&hfoc.speed_ctrl, 0.01f);
 
   	// current sensor
   hfoc.control_mode = POWER_UP_MODE;
@@ -269,6 +287,7 @@ int main(void)
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
 	// voltage sensor
 	HAL_ADCEx_InjectedStart_IT(&hadc3);
+  HAL_Delay(50);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -281,16 +300,14 @@ int main(void)
   htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.0f);
   CurrentSensor_calibrate(&hfoc.current_sensor, 1000U);
   printf("ADC offsets: A=%d, B=%d\r\n", hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset);
-  hfoc.control_mode = TORQUE_CONTROL_MODE;
+  hfoc.control_mode = CALIBRATION_MODE;
+  foc_cal_encoder_misalignment_start(&hfoc);
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    uint32_t ramp_tick = HAL_GetTick() % 20000U;
-    uint32_t max_compare = htim1.Init.Period / 64U;
-    
-    // motor_pid_output = MotorControl_UpdatePid(&motor_pid, 1000.0f, 950.0f, 0.001f);
+
     HAL_Delay(10);
     drv_print_faults(drv);
     HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
@@ -303,13 +320,15 @@ int main(void)
     printf("iq: %.3f\r\n", hfoc.iq);
     printf("i_q_des: %.3f\r\n", hfoc.iq_ref);
     printf("i_q_filt: %.3f\r\n", hfoc.iq);
-    // __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, compare_value);
-    // printf("spi_rx_buff: %u\r\n", encoder_last_word);
+    printf("m_angle: %.3f\r\n", hfoc.m_angle_rad);
+    printf("e_angle: %.3f\r\n", hfoc.e_angle_rad);
+    printf("rpm: %.3f\r\n", hfoc.actual_rpm);
+    printf("rpm_ref: %.3f\r\n", hfoc.rpm_ref);
+
     if (pose_ready)
     {
 
       pose_ready = false;
-      // startEncoderRead();
 
     }
   }
@@ -392,17 +411,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if (hadc->Instance == ADC2) {
   }
 	if (hadc->Instance == ADC3) {
-    CurrentSensor_sample_offset(&hfoc.current_sensor);
-    rpm = MA732_get_rpm(&hfoc.ma732, FOC_TS);
-    MA732_start(&hfoc.ma732);
-    hfoc.v_bus = get_power_voltage();
-    // CurrentSensor_update(&hfoc.current_sensor);
     foc_loop();
 	}
-  // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
-  // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_4);
-  // printf("ADC3 injected conversion complete\r\n");
-  // flip PA_4
   
 }
 /* USER CODE END 4 */

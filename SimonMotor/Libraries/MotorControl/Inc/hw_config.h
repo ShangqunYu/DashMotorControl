@@ -76,9 +76,11 @@
 #define POLE_PAIR 7
 #define KV 330.0f
 
-#define VD_CAL 0.6f
+#define VD_CAL 1.0f
 #define VQ_CAL 0.0f
 
 #define CURRENT_FILTER_ALPHA 0.466512f
+
+#define CAL_ITERATION 100
 
 #endif /* INC_HW_CONFIG_H_ */

@@ -7,6 +7,8 @@
 
 #include "foc.h"
 #include "main.h"
+#include "hw_config.h"
+#include "tim.h"
 
 void CurrentSensor_init(CurrentSensor *sensor,
                         volatile uint32_t *adc_ia,
@@ -52,7 +54,6 @@ void CurrentSensor_sample_offset(CurrentSensor *sensor) {
     if (sensor->offset_calibrating == 0U) {
         return;
     }
-
     sensor->adc_a_offset_sum += *sensor->adc_ia;
     sensor->adc_b_offset_sum += *sensor->adc_ib;
     sensor->adc_offset_sample_count++;
@@ -105,9 +106,9 @@ void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim) {
 }
 
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc) {
-    hfoc->timer->Instance->CCR1 = da;
-    hfoc->timer->Instance->CCR2 = db;
-    hfoc->timer->Instance->CCR3 = dc;
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, da);
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, db);
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, dc);
 }
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit) {
@@ -156,7 +157,93 @@ void foc_sensored_calc_electric_angle(foc_t *hfoc) {
 
     hfoc->e_angle_rad_comp = e_rad;
     
-    MA732_reset_val_flag();
+    MA732_set_val_flag();
+}
+
+void foc_cal_encoder_misalignment_start(foc_t *hfoc) {
+    if (hfoc == NULL) return;
+    
+    hfoc->cal_state = CAL_STATE_SETTLING;
+    hfoc->cal_start_time = HAL_GetTick();
+    hfoc->cal_sample_count = 0;
+    hfoc->cal_rad_offset_sum = 0.0f;
+    
+    // Start open loop voltage control
+    open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, 0.0f);
+}
+
+void foc_cal_encoder_misalignment_update(foc_t *hfoc, float Ts) {
+    if (hfoc == NULL) return;
+    
+    uint32_t elapsed_time = HAL_GetTick() - hfoc->cal_start_time;
+    
+    // State: Settling (10000ms)
+    if (hfoc->cal_state == CAL_STATE_SETTLING) {
+        if (elapsed_time >= 1000) {
+            hfoc->cal_state = CAL_STATE_SAMPLING;
+            hfoc->cal_start_time = HAL_GetTick();  // Reset timer for sampling phase
+            hfoc->cal_sample_count = 0;
+            hfoc->cal_rad_offset_sum = 0.0f;
+        }
+        return;
+    }
+    
+    // State: Sampling (collect CAL_ITERATION samples)
+    if (hfoc->cal_state == CAL_STATE_SAMPLING) {
+        if (hfoc->cal_sample_count < CAL_ITERATION) {
+            hfoc->cal_rad_offset_sum += DEG_TO_RAD(hfoc->ma732.angle_filtered);
+            hfoc->cal_sample_count++;
+        } else {
+            hfoc->cal_state = CAL_STATE_COMPLETE;
+        }
+        return;
+    }
+    
+    // State: Complete
+    if (hfoc->cal_state == CAL_STATE_COMPLETE) {
+        open_loop_voltage_control(hfoc, 0.0f, 0.0f, 0.0f);
+        
+        float rad_offset = hfoc->cal_rad_offset_sum / (float)hfoc->cal_sample_count;
+        hfoc->m_angle_offset = rad_offset;
+        
+        hfoc->control_mode = TORQUE_CONTROL_MODE;
+        hfoc->cal_state = CAL_STATE_IDLE;
+    }
+}
+
+
+void foc_speed_control_update(foc_t *hfoc, float rpm_reference) {
+	if (hfoc == NULL || (hfoc->control_mode != SPEED_CONTROL_MODE && hfoc->control_mode != POSITION_CONTROL_MODE)) {
+		hfoc->speed_ctrl.integral = 0.0f;
+		hfoc->speed_ctrl.last_error = 0.0f;
+		return;
+	}
+
+    hfoc->id_ref = 0.0f;
+    hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, rpm_reference - hfoc->actual_rpm);
+}
+
+void foc_update_position_velocity(foc_t *hfoc, float Ts) {
+    if (hfoc == NULL || Ts <= 0.0f) {
+        return;
+    }
+
+    // Update electrical angle from sensor
+    hfoc->e_rad = hfoc->e_angle_rad_comp;
+    
+    // Calculate actual RPM
+    hfoc->actual_rpm = MA732_get_rpm(&hfoc->ma732, Ts);
+    
+    // Handle sensor direction for RPM
+    if (hfoc->sensor_dir == REVERSE_DIR) {
+        hfoc->actual_rpm = -hfoc->actual_rpm;
+    }
+
+    // Restart SPI read if data is ready
+    if (MA732_get_val_flag()) {
+        MA732_reset_val_flag();
+        MA732_start(&hfoc->ma732);
+    }
 }
 
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad) {
@@ -204,8 +291,8 @@ void foc_current_control_update(foc_t *hfoc, float Ts) {
     iq_ref = CONSTRAIN(iq_ref, -hfoc->max_current, hfoc->max_current);
 
     // pre calculate sin & cos
-    // pre_calc_sin_cos(hfoc->e_rad, &sin_theta, &cos_theta);
-    pre_calc_sin_cos(0.0f, &sin_theta, &cos_theta);
+    pre_calc_sin_cos(hfoc->e_rad, &sin_theta, &cos_theta);
+    // pre_calc_sin_cos(0.0f, &sin_theta, &cos_theta);
 
     clarke_transform(ia, ib, &i_alpha, &i_beta);
     park_transform(i_alpha, i_beta, sin_theta, cos_theta, &id, &iq);
@@ -213,17 +300,6 @@ void foc_current_control_update(foc_t *hfoc, float Ts) {
     
     id_error = id_ref - id;
     iq_error = iq_ref - iq;
-    hfoc->e_rad = hfoc->e_angle_rad_comp;
-    hfoc->actual_rpm = MA732_get_rpm(&hfoc->ma732, Ts);
-    if (hfoc->sensor_dir == REVERSE_DIR) {
-        hfoc->actual_rpm = -hfoc->actual_rpm;
-    }
-
-    if (MA732_get_val_flag()) {
-        MA732_reset_val_flag();
-        MA732_start(&hfoc->ma732);
-    }
-
 
     // set dynamic max output vd and vq
     hfoc->id_ctrl.out_max = hfoc->id_ctrl.out_max_dynamic * v_bus;
@@ -234,8 +310,7 @@ void foc_current_control_update(foc_t *hfoc, float Ts) {
 
     inverse_park_transform(vd_ref, vq_ref, sin_theta, cos_theta, &hfoc->v_alpha, &hfoc->v_beta);
     svpwm(hfoc->v_alpha, hfoc->v_beta, v_bus, pwm_res, &da, &db, &dc);
-    foc_set_pwm(hfoc, dc, db, da);
-    // foc_set_pwm(hfoc, 500, 0, 0);
+    foc_set_pwm(hfoc, da, db, dc);
     
 
     // copy to struct for debug
