@@ -61,7 +61,7 @@ typedef enum {
 	SPEED_CONTROL_MODE,
 	POSITION_CONTROL_MODE,
 	CALIBRATION_MODE,
-	AUDIO_MODE,
+	MIT_MODE,
 	POWER_UP_MODE,
 }motor_mode_t;
 
@@ -82,6 +82,14 @@ typedef enum {
 	P_DET_WAITING_NEGATIVE,
 	P_DET_STOP
 }p_det_state_t;
+
+typedef struct {
+	float des_pos;
+	float des_vel;
+	float f_tau;
+	float kp;
+	float kd;
+} MIT_CMD;
 
 typedef struct {
 	MA732_t ma732;
@@ -166,6 +174,8 @@ typedef struct {
 	uint32_t cal_start_time;
 	uint32_t cal_sample_count;
 	float cal_rad_offset_sum;
+
+	MIT_CMD mit_cmd;
 }foc_t;
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
 void foc_sensored_calc_electric_angle(foc_t *hfoc);
@@ -175,6 +185,7 @@ void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);
 void foc_speed_control_update(foc_t *hfoc, float rpm_reference);
 void foc_update_position_velocity(foc_t *hfoc, float Ts);
+void foc_mit_control_update(foc_t *hfoc);
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad);
 void foc_current_control_update(foc_t *hfoc, float Ts);
 

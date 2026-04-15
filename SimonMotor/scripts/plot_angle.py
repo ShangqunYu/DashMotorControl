@@ -10,12 +10,15 @@ import threading
 import time
 from collections import deque
 
+import math
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import serial
 
 
 CSV_HEADER = ("iq", "i_q_des", "i_q_filt", "id", "id_des", "id_filt", "i_a", "i_b", "i_c", "m_angle", "e_angle", "rpm", "rpm_ref")
+# Optional fields are plotted when present but won't block sample collection if absent.
+OPTIONAL_FIELDS = ("des_pos",)
 LABELED_PATTERNS = {
     "iq": re.compile(r"^iq:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "i_q_des": re.compile(r"^i_q_des:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
@@ -28,6 +31,7 @@ LABELED_PATTERNS = {
     "i_c": re.compile(r"^i_c:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "m_angle": re.compile(r"^m_angle:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "e_angle": re.compile(r"^e_angle:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
+    "des_pos": re.compile(r"^des_pos:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "rpm": re.compile(r"^rpm:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
     "rpm_ref": re.compile(r"^rpm_ref:\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE),
 }
@@ -39,23 +43,54 @@ class CurrentPlotter:
         self.baudrate = baudrate
         self.window_seconds = window_seconds
         self.time_data: deque[float] = deque()
-        self.series = {name: deque() for name in CSV_HEADER}
+        self.series = {name: deque() for name in (*CSV_HEADER, *OPTIONAL_FIELDS)}
         self.pending_labeled: dict[str, float] = {}
         self.start_time = time.monotonic()
         self.running = True
         self.lock = threading.Lock()
+        self._m_angle_raw: float | None = None
+        self._e_angle_raw: float | None = None
 
     def append_sample(self, sample: dict[str, float]) -> None:
         now = time.monotonic() - self.start_time
         with self.lock:
+            # Incrementally unwrap m_angle and e_angle so the stored series is
+            # already continuous — avoids rolling-window artifacts from np.unwrap.
+            raw_m = sample["m_angle"]
+            if self._m_angle_raw is not None:
+                d = raw_m - self._m_angle_raw
+                if d > math.pi:   d -= 2.0 * math.pi
+                elif d < -math.pi: d += 2.0 * math.pi
+                unwrapped_m = self.series["m_angle"][-1] + d
+            else:
+                unwrapped_m = raw_m
+            self._m_angle_raw = raw_m
+
+            raw_e = sample["e_angle"]
+            if self._e_angle_raw is not None:
+                d = raw_e - self._e_angle_raw
+                if d > math.pi:   d -= 2.0 * math.pi * 7
+                elif d < -math.pi: d += 2.0 * math.pi * 7
+                unwrapped_e = self.series["e_angle"][-1] + d
+            else:
+                unwrapped_e = raw_e
+            self._e_angle_raw = raw_e
+
             self.time_data.append(now)
             for name in CSV_HEADER:
-                self.series[name].append(sample[name])
+                if name == "m_angle":
+                    self.series[name].append(unwrapped_m)
+                elif name == "e_angle":
+                    self.series[name].append(unwrapped_e)
+                else:
+                    self.series[name].append(sample[name])
+            for name in OPTIONAL_FIELDS:
+                self.series[name].append(sample.get(name, 0.0))
 
             cutoff = now - self.window_seconds
             while self.time_data and self.time_data[0] < cutoff:
                 self.time_data.popleft()
-                for name in CSV_HEADER:
+                for name in (*CSV_HEADER, *OPTIONAL_FIELDS):
                     self.series[name].popleft()
 
     def try_parse_csv(self, line: str) -> dict[str, float] | None:
@@ -78,6 +113,9 @@ class CurrentPlotter:
             self.pending_labeled[name] = float(match.group(1))
             if all(key in self.pending_labeled for key in CSV_HEADER):
                 sample = {key: self.pending_labeled[key] for key in CSV_HEADER}
+                for key in OPTIONAL_FIELDS:
+                    if key in self.pending_labeled:
+                        sample[key] = self.pending_labeled[key]
                 self.pending_labeled.clear()
                 return sample
             return None
@@ -117,6 +155,7 @@ class CurrentPlotter:
         fig_id, ax_id = plt.subplots()
         fig_phase, ax_phase = plt.subplots()
         fig_angle, ax_angle = plt.subplots()
+        fig_e_angle, ax_e_angle = plt.subplots()
         fig_rpm, ax_rpm = plt.subplots()
 
         iq_lines = {
@@ -136,7 +175,10 @@ class CurrentPlotter:
         }
         angle_lines = {
             "m_angle": ax_angle.plot([], [], label="m_angle", linewidth=2.0)[0],
-            "e_angle": ax_angle.plot([], [], label="e_angle", linewidth=2.0, linestyle="--")[0],
+            "des_pos": ax_angle.plot([], [], label="des_pos", linewidth=2.0, linestyle="--")[0],
+        }
+        e_angle_lines = {
+            "e_angle": ax_e_angle.plot([], [], label="e_angle", linewidth=2.0)[0],
         }
         rpm_lines = {
             "rpm": ax_rpm.plot([], [], label="rpm", linewidth=2.0)[0],
@@ -161,11 +203,17 @@ class CurrentPlotter:
         ax_phase.grid(True, alpha=0.3)
         ax_phase.legend(loc="upper right")
 
-        ax_angle.set_title(f"Motor Angles: {self.port} @ {self.baudrate}")
+        ax_angle.set_title(f"Motor Angle: {self.port} @ {self.baudrate}")
         ax_angle.set_xlabel("Time (s)")
         ax_angle.set_ylabel("Angle (rad)")
         ax_angle.grid(True, alpha=0.3)
         ax_angle.legend(loc="upper right")
+
+        ax_e_angle.set_title(f"Electrical Angle: {self.port} @ {self.baudrate}")
+        ax_e_angle.set_xlabel("Time (s)")
+        ax_e_angle.set_ylabel("Angle (rad)")
+        ax_e_angle.grid(True, alpha=0.3)
+        ax_e_angle.legend(loc="upper right")
 
         ax_rpm.set_title(f"Motor RPM: {self.port} @ {self.baudrate}")
         ax_rpm.set_xlabel("Time (s)")
@@ -179,7 +227,7 @@ class CurrentPlotter:
                 data = {name: list(values) for name, values in self.series.items()}
 
             if not x:
-                return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values()) + tuple(angle_lines.values())
+                return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values()) + tuple(angle_lines.values()) + tuple(e_angle_lines.values())
 
             for name in iq_lines:
                 iq_lines[name].set_data(x, data[name])
@@ -187,8 +235,9 @@ class CurrentPlotter:
                 id_lines[name].set_data(x, data[name])
             for name in phase_lines:
                 phase_lines[name].set_data(x, data[name])
-            for name in angle_lines:
-                angle_lines[name].set_data(x, data[name])
+            angle_lines["m_angle"].set_data(x, data["m_angle"])
+            angle_lines["des_pos"].set_data(x, data["des_pos"])
+            e_angle_lines["e_angle"].set_data(x, data["e_angle"])
             for name in rpm_lines:
                 rpm_lines[name].set_data(x, data[name])
 
@@ -198,6 +247,7 @@ class CurrentPlotter:
             ax_id.set_xlim(x_min, x_max)
             ax_phase.set_xlim(x_min, x_max)
             ax_angle.set_xlim(x_min, x_max)
+            ax_e_angle.set_xlim(x_min, x_max)
             ax_rpm.set_xlim(x_min, x_max)
 
             iq_values = data["iq"] + data["i_q_des"] + data["i_q_filt"]
@@ -219,24 +269,31 @@ class CurrentPlotter:
             phase_margin = max(0.5, 0.1 * max(abs(phase_min), abs(phase_max), 1.0))
             ax_phase.set_ylim(phase_min - phase_margin, phase_max + phase_margin)
 
-            angle_values = data["m_angle"] + data["e_angle"]
+            angle_values = data["m_angle"] + data["des_pos"]
             angle_min = min(angle_values)
             angle_max = max(angle_values)
             angle_margin = max(0.1, 0.1 * max(abs(angle_min), abs(angle_max), 1.0))
             ax_angle.set_ylim(angle_min - angle_margin, angle_max + angle_margin)
 
+            e_angle_values = data["e_angle"]
+            e_angle_min = min(e_angle_values)
+            e_angle_max = max(e_angle_values)
+            e_angle_margin = max(0.1, 0.1 * max(abs(e_angle_min), abs(e_angle_max), 1.0))
+            ax_e_angle.set_ylim(e_angle_min - e_angle_margin, e_angle_max + e_angle_margin)
+
             rpm_values = data["rpm"] + data["rpm_ref"]
             rpm_min = min(rpm_values)
             rpm_max = max(rpm_values)
             rpm_margin = max(10.0, 0.1 * max(abs(rpm_min), abs(rpm_max), 1.0))
-            ax_rpm.set_ylim(rpm_min - rpm_margin, rpm_max + rpm_margin) 
+            ax_rpm.set_ylim(rpm_min - rpm_margin, rpm_max + rpm_margin)
 
-            return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values()) + tuple(angle_lines.values()) + tuple(rpm_lines.values())
+            return tuple(iq_lines.values()) + tuple(id_lines.values()) + tuple(phase_lines.values()) + tuple(angle_lines.values()) + tuple(e_angle_lines.values()) + tuple(rpm_lines.values())
 
         animation_iq = FuncAnimation(fig_iq, update, interval=50, blit=False, cache_frame_data=False)
         animation_id = FuncAnimation(fig_id, update, interval=50, blit=False, cache_frame_data=False)
         animation_phase = FuncAnimation(fig_phase, update, interval=50, blit=False, cache_frame_data=False)
         animation_angle = FuncAnimation(fig_angle, update, interval=50, blit=False, cache_frame_data=False)
+        animation_e_angle = FuncAnimation(fig_e_angle, update, interval=50, blit=False, cache_frame_data=False)
         animation_rpm = FuncAnimation(fig_rpm, update, interval=50, blit=False, cache_frame_data=False)
         try:
             plt.show()
@@ -246,6 +303,7 @@ class CurrentPlotter:
             _ = animation_id
             _ = animation_phase
             _ = animation_angle
+            _ = animation_e_angle
             _ = animation_rpm
 
 

@@ -117,12 +117,28 @@ static void foc_loop(void) {
       foc_current_control_update(&hfoc, FOC_TS);
       break;
     case SPEED_CONTROL_MODE:
-      hfoc.rpm_ref = 0.0f;
+      hfoc.rpm_ref = 60.0f;
       foc_speed_control_update(&hfoc, hfoc.rpm_ref);
       foc_current_control_update(&hfoc, FOC_TS);
       break;
-    case POSITION_CONTROL_MODE:
+    case MIT_MODE: {
+      static uint32_t mit_tick = 0;
+      const float freq = 0.5f;  // Hz - one full oscillation every 2 s
+      const uint32_t period_ticks = (uint32_t)(1.0f / (freq * FOC_TS));
+      float t = (float)mit_tick * FOC_TS;
+      if (++mit_tick >= period_ticks) mit_tick = 0;
+
+      hfoc.mit_cmd.kp = 20.0f;
+      hfoc.mit_cmd.kd = 0.02f;
+      // Sine between 0° and 180°: center 90°, amplitude 90°
+      hfoc.mit_cmd.des_pos = PI / 2.0f + PI / 2.0f * fast_sin(TWO_PI * freq * t);
+      // Feedforward velocity (rad/s → RPM): d(des_pos)/dt * 60/(2π)
+      hfoc.mit_cmd.des_vel = 30.0f * PI * freq * fast_cos(TWO_PI * freq * t);
+      hfoc.mit_cmd.f_tau = 0.0f;
+      foc_mit_control_update(&hfoc);
+      foc_current_control_update(&hfoc, FOC_TS);
       break;
+    }
     case POWER_UP_MODE:
       // open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
       break;
@@ -257,7 +273,7 @@ int main(void)
   pid_reset(&hfoc.id_ctrl);
   pid_set_ts(&hfoc.id_ctrl, FOC_TS);
   pid_set_kp(&hfoc.id_ctrl, 0.2f);
-  pid_set_ki(&hfoc.id_ctrl, 1.0f);
+  pid_set_ki(&hfoc.id_ctrl, 5.0f);
   pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
   pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
 
@@ -265,7 +281,7 @@ int main(void)
   pid_reset(&hfoc.iq_ctrl);
   pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
   pid_set_kp(&hfoc.iq_ctrl, 0.2f);
-  pid_set_ki(&hfoc.iq_ctrl, 1.0f);
+  pid_set_ki(&hfoc.iq_ctrl, 5.0f);
   pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
   pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
 
@@ -321,6 +337,7 @@ int main(void)
     printf("i_q_des: %.3f\r\n", hfoc.iq_ref);
     printf("i_q_filt: %.3f\r\n", hfoc.iq);
     printf("m_angle: %.3f\r\n", hfoc.m_angle_rad);
+    printf("des_pos: %.3f\r\n", hfoc.mit_cmd.des_pos);
     printf("e_angle: %.3f\r\n", hfoc.e_angle_rad);
     printf("rpm: %.3f\r\n", hfoc.actual_rpm);
     printf("rpm_ref: %.3f\r\n", hfoc.rpm_ref);

@@ -206,7 +206,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, float Ts) {
         float rad_offset = hfoc->cal_rad_offset_sum / (float)hfoc->cal_sample_count;
         hfoc->m_angle_offset = rad_offset;
         
-        hfoc->control_mode = TORQUE_CONTROL_MODE;
+        hfoc->control_mode = MIT_MODE;
         hfoc->cal_state = CAL_STATE_IDLE;
     }
 }
@@ -221,6 +221,19 @@ void foc_speed_control_update(foc_t *hfoc, float rpm_reference) {
 
     hfoc->id_ref = 0.0f;
     hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, rpm_reference - hfoc->actual_rpm);
+}
+
+void foc_mit_control_update(foc_t *hfoc){
+    if (hfoc == NULL) return;
+    hfoc->id_ref = 0.0f;
+    float pos_error = hfoc->mit_cmd.des_pos - hfoc->m_angle_rad;
+    // Wrap to [-π, π] so the controller always takes the shortest path
+    while (pos_error >  PI) pos_error -= TWO_PI;
+    while (pos_error < -PI) pos_error += TWO_PI;
+    float vel_error = hfoc->mit_cmd.des_vel - hfoc->actual_rpm;
+    hfoc->iq_ref = hfoc->mit_cmd.kp * pos_error + hfoc->mit_cmd.kd * vel_error;
+    // Cap iq_ref for safety
+    hfoc->iq_ref = CONSTRAIN(hfoc->iq_ref, -10.0f, 10.0f);
 }
 
 void foc_update_position_velocity(foc_t *hfoc, float Ts) {
@@ -256,7 +269,7 @@ void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float an
 }
 
 void foc_current_control_update(foc_t *hfoc, float Ts) {
-	if (hfoc == NULL || Ts <= 0.0f || hfoc->control_mode == AUDIO_MODE) {
+	if (hfoc == NULL || Ts <= 0.0f) {
 		hfoc->id_ctrl.integral = 0.0f;
 		hfoc->id_ctrl.last_error = 0.0f;
 		hfoc->iq_ctrl.integral = 0.0f;
