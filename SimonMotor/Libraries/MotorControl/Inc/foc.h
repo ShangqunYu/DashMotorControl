@@ -15,7 +15,8 @@
 #include "lpf.h"
 #include "FOC_math.h"
 
-#define ERROR_LUT_SIZE (1024)
+#define ERROR_LUT_SIZE  (1024)
+#define LUT_SETTLE_MS   (10U)   // ms to wait at each LUT step before sampling
 
 
 typedef struct{
@@ -63,6 +64,7 @@ typedef enum {
 	CALIBRATION_MODE,
 	MIT_MODE,
 	POWER_UP_MODE,
+	ENCODER_MODE,   // motor coast; prints raw vs LUT-compensated angle for verification
 }motor_mode_t;
 
 typedef enum {
@@ -110,7 +112,8 @@ typedef struct {
 	int meas_inj_n;
 	_Bool meas_inj_start_flag;
 
-	float m_angle_rad; // mechanical angle
+	float m_angle_rad;     // mechanical angle (LUT-compensated when lut_ready)
+	float m_angle_rad_raw; // mechanical angle before LUT correction (always available)
 	float e_angle_rad; // electrical angle
 	float e_angle_rad_comp; // electrical angle
 	float m_angle_offset;
@@ -167,13 +170,22 @@ typedef struct {
 	// Calibration state machine
 	enum {
 		CAL_STATE_IDLE,
-		CAL_STATE_SETTLING,
-		CAL_STATE_SAMPLING,
-		CAL_STATE_COMPLETE
+		CAL_STATE_SETTLING,       // waiting for rotor to lock at 0 before offset sampling
+		CAL_STATE_SAMPLING,       // collecting offset samples
+		CAL_STATE_COMPLETE,       // offset done, kick off LUT sweep
+		CAL_STATE_LUT_SETTLING,   // waiting for rotor to settle at current LUT step
+		CAL_STATE_LUT_RECORDING,  // sample angle error for current LUT step
+		CAL_STATE_LUT_DONE,       // both CW and CCW sweeps finished
 	} cal_state;
 	uint32_t cal_start_time;
 	uint32_t cal_sample_count;
-	float cal_rad_offset_sum;
+	float    cal_rad_offset_sum;
+
+	// Encoder nonlinearity compensation LUT (filled during calibration)
+	float    encd_error_comp[ERROR_LUT_SIZE];
+	uint16_t lut_cal_idx;       // current step index (0 … ERROR_LUT_SIZE-1)
+	uint8_t  lut_cal_cw_done;   // 0 = CW pass in progress, 1 = CCW pass in progress
+	uint8_t  lut_ready;         // 1 once LUT is valid and should be applied
 
 	MIT_CMD mit_cmd;
 }foc_t;

@@ -129,13 +129,13 @@ static void foc_loop(void) {
     case MIT_MODE: {
       static uint32_t mit_tick = 0;
       static uint32_t period_start_ms = 0;
-      const float freq = 0.2f;  // Hz - one full oscillation every 1 s
+      const float freq = 1.0f;  // Hz - one full oscillation every 1 s
       const uint32_t period_ticks = (uint32_t)(1.0f / (freq * FOC_TS));
       float t = (float)mit_tick * FOC_TS;
       if (++mit_tick >= period_ticks) {
         mit_tick = 0;
         uint32_t now_ms = HAL_GetTick();
-        printf("period elapsed: %lu ms\n", now_ms - period_start_ms);
+        // printf("period elapsed: %lu ms\n", now_ms - period_start_ms);
         period_start_ms = now_ms;
       }
 
@@ -150,6 +150,11 @@ static void foc_loop(void) {
       foc_current_control_update(&hfoc, FOC_TS);
       break;
     }
+    case ENCODER_MODE:
+      // Motor coasts; angle is updated by the SPI interrupt.
+      // Raw vs compensated comparison is printed in the main loop.
+      open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
+      break;
     case POWER_UP_MODE:
       // open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
       break;
@@ -318,6 +323,11 @@ int main(void)
     HAL_Delay(10);
     // drv_print_faults(drv);
     HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
+
+    if (hfoc.control_mode == ENCODER_MODE) {
+      printf("m_angle_raw: %.4f\r\n", hfoc.m_angle_rad_raw);
+      printf("m_angle_comp: %.4f\r\n", hfoc.m_angle_rad);
+    }
     // printf("i_a: %.3f\r\n", hfoc.current_sensor.ia_filtered);
     // printf("i_b: %.3f\r\n", hfoc.current_sensor.ib_filtered);
     // printf("i_c: %.3f\r\n", hfoc.current_sensor.ic_filtered);
@@ -332,7 +342,6 @@ int main(void)
     // printf("e_angle: %.3f\r\n", hfoc.e_angle_rad);
     // printf("rpm: %.3f\r\n", hfoc.actual_rpm);
     // printf("rpm_ref: %.3f\r\n", hfoc.rpm_ref);
-
     if (pose_ready)
     {
 

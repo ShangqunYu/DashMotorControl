@@ -122,13 +122,26 @@ void foc_sensored_calc_electric_angle(foc_t *hfoc) {
 
     float angle_deg = MA732_get_degree(&hfoc->ma732);
 
-    // Normalize mechanical angle
+    // Normalize mechanical angle (offset-corrected, not yet nonlinearity-corrected)
     hfoc->m_angle_rad = DEG_TO_RAD(angle_deg) - hfoc->m_angle_offset;
     norm_angle_rad(&hfoc->m_angle_rad);
+    hfoc->m_angle_rad_raw = hfoc->m_angle_rad;  // snapshot before LUT correction
+
+    // Apply encoder nonlinearity correction via interpolated LUT
+    if (hfoc->lut_ready) {
+        float lut_idx_f = (hfoc->m_angle_rad / TWO_PI) * (float)ERROR_LUT_SIZE;
+        int idx0 = (int)lut_idx_f;                    // always in [0, ERROR_LUT_SIZE-1]
+        int idx1 = (idx0 + 1) % ERROR_LUT_SIZE;
+        float frac = lut_idx_f - (float)idx0;
+        float correction = hfoc->encd_error_comp[idx0] * (1.0f - frac)
+                         + hfoc->encd_error_comp[idx1] * frac;
+        hfoc->m_angle_rad -= correction;
+        norm_angle_rad(&hfoc->m_angle_rad);
+    }
 
     // Calculate raw electric angle
     float e_rad = hfoc->m_angle_rad * hfoc->pole_pairs;
-    
+
     // Handle sensor direction
     if (hfoc->sensor_dir == REVERSE_DIR) {
         e_rad = TWO_PI - e_rad;
@@ -136,22 +149,6 @@ void foc_sensored_calc_electric_angle(foc_t *hfoc) {
 
     hfoc->e_angle_rad = e_rad;
 
-    // Calculate LUT index with wrap-around
-    // float lut_idx_f = (hfoc->m_angle_rad / TWO_PI) * ERROR_LUT_SIZE;
-    // lut_idx_f = fmodf(lut_idx_f, ERROR_LUT_SIZE);
-    // if (lut_idx_f < 0) {
-    //     lut_idx_f += ERROR_LUT_SIZE;
-    // }
-
-    // Get neighboring indices with wrap-around
-    // int idx0 = (int)lut_idx_f % ERROR_LUT_SIZE;
-    // int idx1 = (idx0 + 1) % ERROR_LUT_SIZE;
-    // float frac = lut_idx_f - (float)idx0;
-
-    // Linear interpolation
-    // float encoder_error = m_config.encd_error_comp[idx0] * (1.0f - frac) + m_config.encd_error_comp[idx1] * frac;
-    // e_rad += encoder_error;
-    
     // Normalize final electric angle
     norm_angle_rad(&e_rad);
 
@@ -174,21 +171,23 @@ void foc_cal_encoder_misalignment_start(foc_t *hfoc) {
 
 void foc_cal_encoder_misalignment_update(foc_t *hfoc, float Ts) {
     if (hfoc == NULL) return;
-    
+
     uint32_t elapsed_time = HAL_GetTick() - hfoc->cal_start_time;
-    
-    // State: Settling (10000ms)
+
+    // ── Phase 1: offset calibration ────────────────────────────────────────
+
+    // Settling: wait 1 s for rotor to lock at 0 electrical angle
     if (hfoc->cal_state == CAL_STATE_SETTLING) {
         if (elapsed_time >= 1000) {
             hfoc->cal_state = CAL_STATE_SAMPLING;
-            hfoc->cal_start_time = HAL_GetTick();  // Reset timer for sampling phase
+            hfoc->cal_start_time = HAL_GetTick();
             hfoc->cal_sample_count = 0;
             hfoc->cal_rad_offset_sum = 0.0f;
         }
         return;
     }
-    
-    // State: Sampling (collect CAL_ITERATION samples)
+
+    // Sampling: collect CAL_ITERATION samples to average the offset
     if (hfoc->cal_state == CAL_STATE_SAMPLING) {
         if (hfoc->cal_sample_count < CAL_ITERATION) {
             hfoc->cal_rad_offset_sum += DEG_TO_RAD(hfoc->ma732.angle_filtered);
@@ -198,16 +197,88 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, float Ts) {
         }
         return;
     }
-    
-    // State: Complete
+
+    // Offset done: store result, initialise LUT sweep
     if (hfoc->cal_state == CAL_STATE_COMPLETE) {
+        hfoc->m_angle_offset = hfoc->cal_rad_offset_sum / (float)hfoc->cal_sample_count;
+
+        // Kick off CW sweep from step 0
+        hfoc->lut_cal_idx    = 0;
+        hfoc->lut_cal_cw_done = 0;
+        hfoc->lut_ready       = 0;
+
+        float e_cmd = 0.0f;  // step 0 → electrical angle 0
+        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, e_cmd);
+        hfoc->cal_start_time = HAL_GetTick();
+        hfoc->cal_state = CAL_STATE_LUT_SETTLING;
+        return;
+    }
+
+    // ── Phase 2: nonlinearity LUT ──────────────────────────────────────────
+
+    // Settling: hold commanded angle, wait LUT_SETTLE_MS before sampling
+    if (hfoc->cal_state == CAL_STATE_LUT_SETTLING) {
+        if (HAL_GetTick() - hfoc->cal_start_time >= LUT_SETTLE_MS) {
+            hfoc->cal_state = CAL_STATE_LUT_RECORDING;
+        }
+        return;
+    }
+
+    // Recording: measure error at current step, command next step
+    if (hfoc->cal_state == CAL_STATE_LUT_RECORDING) {
+        uint16_t idx = hfoc->lut_cal_idx;
+
+        // Ideal mechanical angle for this LUT slot
+        float m_ideal = (float)idx / (float)ERROR_LUT_SIZE * TWO_PI;
+
+        // Error = reported angle − ideal angle, wrapped to [-π, π]
+        float error = hfoc->m_angle_rad - m_ideal;
+        while (error >  PI) error -= TWO_PI;
+        while (error < -PI) error += TWO_PI;
+
+        if (!hfoc->lut_cal_cw_done) {
+            // CW pass: store directly
+            hfoc->encd_error_comp[idx] = error;
+        } else {
+            // CCW pass: average with CW result to cancel friction bias
+            hfoc->encd_error_comp[idx] = (hfoc->encd_error_comp[idx] + error) * 0.5f;
+        }
+
+        // Advance index
+        uint16_t next_idx;
+        if (!hfoc->lut_cal_cw_done) {
+            if (idx < ERROR_LUT_SIZE - 1) {
+                next_idx = idx + 1;             // continue CW
+            } else {
+                hfoc->lut_cal_cw_done = 1;
+                next_idx = ERROR_LUT_SIZE - 1;  // start CCW from the top
+            }
+        } else {
+            if (idx > 0) {
+                next_idx = idx - 1;             // continue CCW
+            } else {
+                // Both passes done
+                hfoc->cal_state = CAL_STATE_LUT_DONE;
+                return;
+            }
+        }
+        hfoc->lut_cal_idx = next_idx;
+
+        // Command next electrical angle and start settle timer
+        float next_e_cmd = ((float)next_idx / (float)ERROR_LUT_SIZE * TWO_PI)
+                           * (float)hfoc->pole_pairs;
+        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, next_e_cmd);
+        hfoc->cal_start_time = HAL_GetTick();
+        hfoc->cal_state = CAL_STATE_LUT_SETTLING;
+        return;
+    }
+
+    // LUT done: stop drive, mark LUT valid, enter ENCODER_MODE for verification
+    if (hfoc->cal_state == CAL_STATE_LUT_DONE) {
         open_loop_voltage_control(hfoc, 0.0f, 0.0f, 0.0f);
-        
-        float rad_offset = hfoc->cal_rad_offset_sum / (float)hfoc->cal_sample_count;
-        hfoc->m_angle_offset = rad_offset;
-        
-        hfoc->control_mode = MIT_MODE;
-        hfoc->cal_state = CAL_STATE_IDLE;
+        hfoc->lut_ready     = 1;
+        hfoc->control_mode  = ENCODER_MODE;
+        hfoc->cal_state     = CAL_STATE_IDLE;
     }
 }
 
