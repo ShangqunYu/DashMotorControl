@@ -40,7 +40,7 @@
 #include "MA732.h"
 #include "foc.h"
 #include "pid_utils.h"
-#define BLDC_PWM_FREQ 10000
+#define BLDC_PWM_FREQ 40000
 #define FOC_TS (1.0f / (float)BLDC_PWM_FREQ)
 #define SPEED_CONTROL_CYCLE	10
 #define SPEED_TS (FOC_TS * SPEED_CONTROL_CYCLE) 
@@ -109,6 +109,11 @@ static void foc_loop(void) {
 
   // Update position and velocity (called every FOC cycle)
   foc_update_position_velocity(&hfoc, FOC_TS);
+  // // pa4 set high
+  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+  // // pa4 set low
+  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+
 
   switch(hfoc.control_mode) {
     case TORQUE_CONTROL_MODE:
@@ -123,17 +128,23 @@ static void foc_loop(void) {
       break;
     case MIT_MODE: {
       static uint32_t mit_tick = 0;
-      const float freq = 0.5f;  // Hz - one full oscillation every 2 s
+      static uint32_t period_start_ms = 0;
+      const float freq = 0.2f;  // Hz - one full oscillation every 1 s
       const uint32_t period_ticks = (uint32_t)(1.0f / (freq * FOC_TS));
       float t = (float)mit_tick * FOC_TS;
-      if (++mit_tick >= period_ticks) mit_tick = 0;
+      if (++mit_tick >= period_ticks) {
+        mit_tick = 0;
+        uint32_t now_ms = HAL_GetTick();
+        printf("period elapsed: %lu ms\n", now_ms - period_start_ms);
+        period_start_ms = now_ms;
+      }
 
       hfoc.mit_cmd.kp = 20.0f;
       hfoc.mit_cmd.kd = 0.02f;
       // Sine between 0° and 180°: center 90°, amplitude 90°
       hfoc.mit_cmd.des_pos = PI / 2.0f + PI / 2.0f * fast_sin(TWO_PI * freq * t);
       // Feedforward velocity (rad/s → RPM): d(des_pos)/dt * 60/(2π)
-      hfoc.mit_cmd.des_vel = 30.0f * PI * freq * fast_cos(TWO_PI * freq * t);
+      hfoc.mit_cmd.des_vel = 0.0f;
       hfoc.mit_cmd.f_tau = 0.0f;
       foc_mit_control_update(&hfoc);
       foc_current_control_update(&hfoc, FOC_TS);
@@ -225,27 +236,7 @@ int main(void)
 
 
     /* DRV8323 setup */
-  HAL_GPIO_WritePin(DRV_CS, GPIO_PIN_SET ); 	// CS high
-  HAL_GPIO_WritePin(ENABLE_PIN, GPIO_PIN_SET );
-  HAL_Delay(1);
-  drv_write_DCR(drv, 0x0, DIS_GDF_EN, 0x0, PWM_MODE_3X, 0x0, 0x0, 0x0, 0x0, 0x1);
-  HAL_Delay(1);
-  drv_write_HSR(drv, LOCK_OFF, IDRIVEP_HS_300MA, IDRIVEN_HS_200MA);
-  HAL_Delay(1);
-  drv_write_LSR(drv, 1, TDRIVE_1000NS, IDRIVEP_LS_850MA, IDRIVEN_LS_600MA);
-  HAL_Delay(1);
-  int CSA_GAIN;
-  if(I_MAX <= 40.0f){CSA_GAIN = CSA_GAIN_40;}	// Up to 40A use 40X amplifier gain
-  else{CSA_GAIN = CSA_GAIN_20;}					// From 40-60A use 20X amplifier gain.  (Make this generic in the future)
-//  drv_write_CSACR(drv, 0x0, 0x1, 0x0, CSA_GAIN_40, 0x0, 0x1, 0x1, 0x1, SEN_LVL_0_25);
-  drv_write_CSACR(drv, 0x0, 0x1, 0x0, CSA_GAIN, 0x1, 0x0, 0x0, 0x0, SEN_LVL_0_5);
-  HAL_Delay(1);
-  // zero_current(&controller);
-  HAL_Delay(1);
-  drv_write_OCPCR(drv, TRETRY_8MS, DEADTIME_50NS, OCP_LATCH, OCP_DEG_4US, VDS_LVL_0_7);
-  HAL_Delay(1);
-  drv_disable_gd(drv);
-  HAL_Delay(1);
+  drv_init(drv, I_MAX);
 
   MA732_config(&hfoc.ma732, &ENC_SPI);
   for (int i=0; i<20; i++) {
@@ -262,7 +253,7 @@ int main(void)
   // the total adc reading takes about 5us, so set the offset to 2.5us to allow for some margin. 
   // uint32_t offset = (uint32_t)((htim1.Instance->ARR+ 1) * 2  / 180 * 2.5);
   uint32_t offset = (uint32_t)(2.5f * 180);
-  htim1.Instance->CCR4 = htim1.Instance->ARR - offset;
+  htim1.Instance->CCR4 = htim1.Instance->ARR - 240;
 
   foc_motor_init(&hfoc, POLE_PAIR, 360.0f);
   foc_sensor_init(&hfoc, 0.0f, NORMAL_DIR);
@@ -325,22 +316,22 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     HAL_Delay(10);
-    drv_print_faults(drv);
+    // drv_print_faults(drv);
     HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
-    printf("i_a: %.3f\r\n", hfoc.current_sensor.ia_filtered);
-    printf("i_b: %.3f\r\n", hfoc.current_sensor.ib_filtered);
-    printf("i_c: %.3f\r\n", hfoc.current_sensor.ic_filtered);
-    printf("id: %.3f\r\n", hfoc.id);
-    printf("id_des: %.3f\r\n", hfoc.id_ref);
-    printf("id_filt: %.3f\r\n", hfoc.id);
-    printf("iq: %.3f\r\n", hfoc.iq);
-    printf("i_q_des: %.3f\r\n", hfoc.iq_ref);
-    printf("i_q_filt: %.3f\r\n", hfoc.iq);
-    printf("m_angle: %.3f\r\n", hfoc.m_angle_rad);
-    printf("des_pos: %.3f\r\n", hfoc.mit_cmd.des_pos);
-    printf("e_angle: %.3f\r\n", hfoc.e_angle_rad);
-    printf("rpm: %.3f\r\n", hfoc.actual_rpm);
-    printf("rpm_ref: %.3f\r\n", hfoc.rpm_ref);
+    // printf("i_a: %.3f\r\n", hfoc.current_sensor.ia_filtered);
+    // printf("i_b: %.3f\r\n", hfoc.current_sensor.ib_filtered);
+    // printf("i_c: %.3f\r\n", hfoc.current_sensor.ic_filtered);
+    // printf("id: %.3f\r\n", hfoc.id);
+    // printf("id_des: %.3f\r\n", hfoc.id_ref);
+    // printf("id_filt: %.3f\r\n", hfoc.id);
+    // printf("iq: %.3f\r\n", hfoc.iq);
+    // printf("i_q_des: %.3f\r\n", hfoc.iq_ref);
+    // printf("i_q_filt: %.3f\r\n", hfoc.iq);
+    // printf("m_angle: %.3f\r\n", hfoc.m_angle_rad);
+    // printf("des_pos: %.3f\r\n", hfoc.mit_cmd.des_pos);
+    // printf("e_angle: %.3f\r\n", hfoc.e_angle_rad);
+    // printf("rpm: %.3f\r\n", hfoc.actual_rpm);
+    // printf("rpm_ref: %.3f\r\n", hfoc.rpm_ref);
 
     if (pose_ready)
     {

@@ -64,6 +64,25 @@ void drv_calibrate(DRVStruct drv){
 	uint16_t val = (0x1<<4) + (0x1<<3) + (0x1<<2);
 	drv_write_register(drv, CSACR, val);
 }
+void drv_init(DRVStruct drv, float i_max) {
+    HAL_GPIO_WritePin(DRV_CS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(ENABLE_PIN, GPIO_PIN_SET);
+    HAL_Delay(1);
+    drv_write_DCR(drv, 0x0, DIS_GDF_EN, 0x0, PWM_MODE_3X, 0x0, 0x0, 0x0, 0x0, 0x1);
+    HAL_Delay(1);
+    drv_write_HSR(drv, LOCK_OFF, IDRIVEP_HS_300MA, IDRIVEN_HS_200MA);
+    HAL_Delay(1);
+    drv_write_LSR(drv, 1, TDRIVE_1000NS, IDRIVEP_LS_850MA, IDRIVEN_LS_600MA);
+    HAL_Delay(1);
+    int csa_gain = (i_max <= 40.0f) ? CSA_GAIN_40 : CSA_GAIN_20;
+    drv_write_CSACR(drv, 0x0, 0x1, 0x0, csa_gain, 0x1, 0x0, 0x0, 0x0, SEN_LVL_0_5);
+    HAL_Delay(1);
+    drv_write_OCPCR(drv, TRETRY_8MS, DEADTIME_50NS, OCP_LATCH, OCP_DEG_4US, VDS_LVL_0_7);
+    HAL_Delay(1);
+    drv_disable_gd(drv);
+    HAL_Delay(1);
+}
+
 void drv_print_faults(DRVStruct drv){
     uint16_t val1 = drv_read_FSR1(drv);
     uint16_t val2 = drv_read_FSR2(drv);
