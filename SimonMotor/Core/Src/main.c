@@ -49,6 +49,17 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+// CAN command buffer – written by CAN ISR, consumed by foc_loop
+typedef struct {
+    motor_mode_t mode;
+    float        des_pos;
+    float        des_vel;
+    float        kp;
+    float        kd;
+    uint8_t      mode_pending;   // 1 = new mode waiting
+    uint8_t      mit_pending;    // 1 = new MIT params waiting
+} can_cmd_t;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -76,6 +87,8 @@ static volatile uint16_t encoder_last_word = 0U;
 
 bool pose_ready = false;
 float rpm = 0.0f;
+
+volatile can_cmd_t g_can_cmd = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -114,6 +127,19 @@ static void foc_loop(void) {
   // // pa4 set low
   // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 
+
+  // Apply any pending CAN command before running the control loop
+  if (g_can_cmd.mode_pending) {
+    hfoc.control_mode = g_can_cmd.mode;
+    g_can_cmd.mode_pending = 0;
+  }
+  if (g_can_cmd.mit_pending) {
+    hfoc.mit_cmd.des_pos = g_can_cmd.des_pos;
+    hfoc.mit_cmd.des_vel = g_can_cmd.des_vel;
+    hfoc.mit_cmd.kp      = g_can_cmd.kp;
+    hfoc.mit_cmd.kd      = g_can_cmd.kd;
+    g_can_cmd.mit_pending = 0;
+  }
 
   switch(hfoc.control_mode) {
     case TORQUE_CONTROL_MODE:
@@ -234,10 +260,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
   MotorControl_InitPid(&motor_pid, 1.0f, 0.1f, 0.01f, -100.0f, 100.0f);
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
-  // if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-  // {
-	//   Error_Handler();
-  // }
+  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
 
     /* DRV8323 setup */
@@ -406,6 +432,56 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+// CAN protocol
+//  ID = CAN_ID   : mode switch  – data[0] = motor_mode_t value
+//  ID = CAN_ID+1 : MIT command  – 8 bytes
+//    [0..1] int16  des_pos  scaled over [P_MIN .. P_MAX]   (rad)
+//    [2..3] int16  des_vel  scaled over [V_MIN .. V_MAX]   (rad/s)
+//    [4..5] uint16 kp       scaled over [0 .. KP_MAX]
+//    [6..7] uint16 des_kd   scaled over [0 .. KD_MAX]
+//
+// Scaling helpers (matches MIT mini-cheetah convention):
+//   float = lo + (int16 + 32768) / 65535 * (hi - lo)
+static inline float scale_int16(int16_t raw, float lo, float hi)
+{
+    return lo + ((float)(raw + 32768) / 65535.0f) * (hi - lo);
+}
+static inline float scale_uint16(uint16_t raw, float hi)
+{
+    return ((float)raw / 65535.0f) * hi;
+}
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_RxHeaderTypeDef hdr;
+    uint8_t data[8];
+
+    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &hdr, data) != HAL_OK)
+        return;
+
+    uint32_t id = hdr.StdId;
+
+    if (id == (uint32_t)CAN_ID) {
+        // Mode switch: single byte
+        g_can_cmd.mode         = (motor_mode_t)data[0];
+        g_can_cmd.mode_pending = 1;
+    }
+    else if (id == (uint32_t)(CAN_ID + 1) && hdr.DLC == 8) {
+        // MIT command: 8-byte packed
+        int16_t  raw_pos = (int16_t)((data[0] << 8) | data[1]);
+        int16_t  raw_vel = (int16_t)((data[2] << 8) | data[3]);
+        uint16_t raw_kp  = (uint16_t)((data[4] << 8) | data[5]);
+        uint16_t raw_kd  = (uint16_t)((data[6] << 8) | data[7]);
+
+        g_can_cmd.des_pos    = scale_int16(raw_pos, P_MIN, P_MAX);
+        g_can_cmd.des_vel    = scale_int16(raw_vel, V_MIN, V_MAX);
+        g_can_cmd.kp         = scale_uint16(raw_kp, KP_MAX);
+        g_can_cmd.kd         = scale_uint16(raw_kd, KD_MAX);
+        g_can_cmd.mit_pending = 1;
+    }
+}
+
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
