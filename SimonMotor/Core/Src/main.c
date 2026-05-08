@@ -460,7 +460,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &hdr, data) != HAL_OK)
         return;
 
-    uint32_t id = hdr.StdId;
+    uint32_t id = hdr.ExtId;
 
     if (id == (uint32_t)CAN_ID) {
         // Mode switch: single byte

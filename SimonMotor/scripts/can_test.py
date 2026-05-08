@@ -33,7 +33,7 @@ def send_mode(bus, can_id, mode):
     msg = can.Message(
         arbitration_id=can_id,
         data=[mode],
-        is_extended_id=False,
+        is_extended_id=True,
     )
     bus.send(msg, timeout=0.2)
     print(f"Sent mode-switch frame: id=0x{can_id:03X}  data=[{mode}]  ({msg})")
@@ -46,7 +46,7 @@ def main():
         sys.exit(f"Failed to open {CHANNEL}: {exc}")
 
     try:
-        send_mode(bus, CAN_ID, MIT_MODE)
+        send_mode(bus, CAN_ID, ENCODER_MODE)
     except Exception as exc:
         sys.exit(f"Send failed: {exc}")
     finally:
