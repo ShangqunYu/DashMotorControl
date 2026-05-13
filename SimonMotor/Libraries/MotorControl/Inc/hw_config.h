@@ -79,6 +79,10 @@
 #define VD_CAL 1.0f
 #define VQ_CAL 0.0f
 
+#define W_CAL               10.0f   // LUT sweep speed (electrical rad/s)
+#define LUT_SAMPLES_PER_PPAIR 128U  // raw samples per pole-pair during sweep
+#define ERROR_LUT_SIZE      128U    // encoder nonlinearity correction LUT entries
+
 #define CURRENT_FILTER_ALPHA 0.466512f
 
 #define CAL_ITERATION 100

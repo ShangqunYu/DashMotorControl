@@ -37,8 +37,10 @@
 #include "preference_writer.h"
 #include "drv8353.h"
 #include <stdio.h>
-#include "MA732.h"
+#include <string.h>
 #include "foc.h"
+#include "angle_sensor.h"
+#include "foc_calibration.h"
 #include "pid_utils.h"
 #define BLDC_PWM_FREQ 40000
 #define FOC_TS (1.0f / (float)BLDC_PWM_FREQ)
@@ -81,6 +83,7 @@ PreferenceWriter prefs;
 static MotorControlPid_t motor_pid;
 DRVStruct drv;
 foc_t hfoc;
+CalStruct hcal;
 
 
 static volatile uint16_t encoder_last_word = 0U;
@@ -130,8 +133,12 @@ static void foc_loop(void) {
 
   // Apply any pending CAN command before running the control loop
   if (g_can_cmd.mode_pending) {
-    hfoc.control_mode = g_can_cmd.mode;
+    motor_mode_t new_mode = g_can_cmd.mode;
     g_can_cmd.mode_pending = 0;
+    hfoc.control_mode = new_mode;
+    if (new_mode == CALIBRATION_MODE) {
+      foc_cal_encoder_misalignment_start(&hfoc, &hcal);
+    }
   }
   if (g_can_cmd.mit_pending) {
     hfoc.mit_cmd.des_pos = g_can_cmd.des_pos;
@@ -148,8 +155,8 @@ static void foc_loop(void) {
       foc_current_control_update(&hfoc, FOC_TS);
       break;
     case SPEED_CONTROL_MODE:
-      hfoc.rpm_ref = 60.0f;
-      foc_speed_control_update(&hfoc, hfoc.rpm_ref);
+      hfoc.vel_ref = TWO_PI;  // 1 rev/s = 2π rad/s (~60 RPM)
+      foc_speed_control_update(&hfoc, hfoc.vel_ref);
       foc_current_control_update(&hfoc, FOC_TS);
       break;
     case MIT_MODE: {
@@ -166,10 +173,10 @@ static void foc_loop(void) {
       }
 
       hfoc.mit_cmd.kp = 20.0f;
-      hfoc.mit_cmd.kd = 0.02f;
+      hfoc.mit_cmd.kd = 0.2f;
       // Sine between 0° and 180°: center 90°, amplitude 90°
       hfoc.mit_cmd.des_pos = PI / 2.0f + PI / 2.0f * fast_sin(TWO_PI * freq * t);
-      // Feedforward velocity (rad/s → RPM): d(des_pos)/dt * 60/(2π)
+      // Feedforward velocity (rad/s):
       hfoc.mit_cmd.des_vel = 0.0f;
       hfoc.mit_cmd.f_tau = 0.0f;
       foc_mit_control_update(&hfoc);
@@ -185,7 +192,7 @@ static void foc_loop(void) {
       // open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
       break;
     case CALIBRATION_MODE:
-      foc_cal_encoder_misalignment_update(&hfoc, FOC_TS);
+      foc_cal_encoder_misalignment_update(&hfoc, &hcal, FOC_TS);
       break;
     default:
       break;
@@ -269,12 +276,12 @@ int main(void)
     /* DRV8323 setup */
   drv_init(drv, I_MAX);
 
-  MA732_config(&hfoc.ma732, &ENC_SPI);
+  MA732_config(&hfoc.angle_sensor.ma732, &ENC_SPI);
   for (int i=0; i<20; i++) {
-    MA732_start(&hfoc.ma732);
+    MA732_start(&hfoc.angle_sensor.ma732);
     HAL_Delay(10);
   }
-    // MA732_start(&hfoc.ma732);
+    // MA732_start(&hfoc.angle_sensor.ma732);
 
     /* Turn on PWM */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -338,8 +345,17 @@ int main(void)
   htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.0f);
   CurrentSensor_calibrate(&hfoc.current_sensor, 1000U);
   printf("ADC offsets: A=%d, B=%d\r\n", hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset);
-  hfoc.control_mode = CALIBRATION_MODE;
-  foc_cal_encoder_misalignment_start(&hfoc);
+
+  // Load encoder calibration from flash if a previous calibration was saved
+  if (CALIBRATION_DONE_FLAG == 1) {
+    hfoc.angle_sensor.m_angle_offset = M_ANGLE_OFFSET;
+    memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
+           sizeof(hfoc.angle_sensor.encd_error_comp));
+    hfoc.angle_sensor.lut_ready = 1;
+    printf("Encoder cal loaded: offset=%.4f rad\r\n", hfoc.angle_sensor.m_angle_offset);
+  }
+
+  hfoc.control_mode = POWER_UP_MODE;
   while (1)
   {
     /* USER CODE END WHILE */
@@ -347,12 +363,29 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     HAL_Delay(10);
+
+    // Post-process LUT after sweeps finish (1024×128 ops – must run outside ISR)
+    if (hcal.cal_state == CAL_STATE_LUT_POSTPROC_PENDING) {
+      foc_cal_lut_postprocess(&hfoc, &hcal);
+
+      // Persist LUT and angle offset to flash
+      memcpy(&ENCODER_LUT, hfoc.angle_sensor.encd_error_comp,
+             sizeof(hfoc.angle_sensor.encd_error_comp));
+      M_ANGLE_OFFSET = hfoc.angle_sensor.m_angle_offset;
+      CALIBRATION_DONE_FLAG = 1;
+      if (!preference_writer_ready(prefs)) { preference_writer_open(&prefs); }
+      preference_writer_flush(&prefs);
+      preference_writer_close(&prefs);
+      preference_writer_load(prefs);
+      printf("LUT calibration complete, saved to flash\r\n");
+    }
+
     // drv_print_faults(drv);
     HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
 
     if (hfoc.control_mode == ENCODER_MODE) {
-      printf("m_angle_raw: %.4f\r\n", hfoc.m_angle_rad_raw);
-      printf("m_angle_comp: %.4f\r\n", hfoc.m_angle_rad);
+      printf("m_angle_raw: %.4f\r\n", hfoc.angle_sensor.m_angle_rad_raw);
+      printf("m_angle_comp: %.4f\r\n", hfoc.angle_sensor.m_angle_rad);
     }
     // printf("i_a: %.3f\r\n", hfoc.current_sensor.ia_filtered);
     // printf("i_b: %.3f\r\n", hfoc.current_sensor.ib_filtered);
@@ -363,11 +396,11 @@ int main(void)
     // printf("iq: %.3f\r\n", hfoc.iq);
     // printf("i_q_des: %.3f\r\n", hfoc.iq_ref);
     // printf("i_q_filt: %.3f\r\n", hfoc.iq);
-    // printf("m_angle: %.3f\r\n", hfoc.m_angle_rad);
+    // printf("m_angle: %.3f\r\n", hfoc.angle_sensor.m_angle_rad);
     // printf("des_pos: %.3f\r\n", hfoc.mit_cmd.des_pos);
-    // printf("e_angle: %.3f\r\n", hfoc.e_angle_rad);
-    // printf("rpm: %.3f\r\n", hfoc.actual_rpm);
-    // printf("rpm_ref: %.3f\r\n", hfoc.rpm_ref);
+    // printf("e_angle: %.3f\r\n", hfoc.angle_sensor.e_angle_rad);
+    // printf("vel: %.3f\r\n", hfoc.angle_sensor.actual_vel);
+    // printf("vel_ref: %.3f\r\n", hfoc.vel_ref);
     if (pose_ready)
     {
 
@@ -487,7 +520,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
   if (hspi->Instance == ENC_SPI.Instance)
   {
     pose_ready = true;
-    foc_sensored_calc_electric_angle(&hfoc);
+    angle_sensor_update(&hfoc.angle_sensor);
   }
 }
 

@@ -6,6 +6,7 @@
  */
 
 #include "foc.h"
+#include "angle_sensor.h"
 #include "main.h"
 #include "hw_config.h"
 #include "tim.h"
@@ -85,15 +86,15 @@ void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv) {
 		return;
 	}
 
-	hfoc->pole_pairs = pole_pairs;
+	hfoc->angle_sensor.pole_pairs = pole_pairs;
 	hfoc->kv = kv;
 }
 
 void foc_sensor_init(foc_t *hfoc, float m_rad_offset, dir_mode_t sensor_dir) {
 	if (hfoc == NULL) return;
 
-	hfoc->m_angle_offset = m_rad_offset;
-	hfoc->sensor_dir = sensor_dir;
+	hfoc->angle_sensor.m_angle_offset = m_rad_offset;
+	hfoc->angle_sensor.sensor_dir = sensor_dir;
 }
 
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim) {
@@ -117,173 +118,7 @@ void foc_set_limit_current(foc_t *hfoc, float i_limit) {
 	hfoc->max_current = i_limit;
 }
 
-void foc_sensored_calc_electric_angle(foc_t *hfoc) {
-
-
-    float angle_deg = MA732_get_degree(&hfoc->ma732);
-
-    // Normalize mechanical angle (offset-corrected, not yet nonlinearity-corrected)
-    hfoc->m_angle_rad = DEG_TO_RAD(angle_deg) - hfoc->m_angle_offset;
-    norm_angle_rad(&hfoc->m_angle_rad);
-    hfoc->m_angle_rad_raw = hfoc->m_angle_rad;  // snapshot before LUT correction
-
-    // Apply encoder nonlinearity correction via interpolated LUT
-    if (hfoc->lut_ready) {
-        float lut_idx_f = (hfoc->m_angle_rad / TWO_PI) * (float)ERROR_LUT_SIZE;
-        int idx0 = (int)lut_idx_f;                    // always in [0, ERROR_LUT_SIZE-1]
-        int idx1 = (idx0 + 1) % ERROR_LUT_SIZE;
-        float frac = lut_idx_f - (float)idx0;
-        float correction = hfoc->encd_error_comp[idx0] * (1.0f - frac)
-                         + hfoc->encd_error_comp[idx1] * frac;
-        hfoc->m_angle_rad -= correction;
-        norm_angle_rad(&hfoc->m_angle_rad);
-    }
-
-    // Calculate raw electric angle
-    float e_rad = hfoc->m_angle_rad * hfoc->pole_pairs;
-
-    // Handle sensor direction
-    if (hfoc->sensor_dir == REVERSE_DIR) {
-        e_rad = TWO_PI - e_rad;
-    }
-
-    hfoc->e_angle_rad = e_rad;
-
-    // Normalize final electric angle
-    norm_angle_rad(&e_rad);
-
-    hfoc->e_angle_rad_comp = e_rad;
-    
-    MA732_set_val_flag();
-}
-
-void foc_cal_encoder_misalignment_start(foc_t *hfoc) {
-    if (hfoc == NULL) return;
-    
-    hfoc->cal_state = CAL_STATE_SETTLING;
-    hfoc->cal_start_time = HAL_GetTick();
-    hfoc->cal_sample_count = 0;
-    hfoc->cal_rad_offset_sum = 0.0f;
-    
-    // Start open loop voltage control
-    open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, 0.0f);
-}
-
-void foc_cal_encoder_misalignment_update(foc_t *hfoc, float Ts) {
-    if (hfoc == NULL) return;
-
-    uint32_t elapsed_time = HAL_GetTick() - hfoc->cal_start_time;
-
-    // ── Phase 1: offset calibration ────────────────────────────────────────
-
-    // Settling: wait 1 s for rotor to lock at 0 electrical angle
-    if (hfoc->cal_state == CAL_STATE_SETTLING) {
-        if (elapsed_time >= 1000) {
-            hfoc->cal_state = CAL_STATE_SAMPLING;
-            hfoc->cal_start_time = HAL_GetTick();
-            hfoc->cal_sample_count = 0;
-            hfoc->cal_rad_offset_sum = 0.0f;
-        }
-        return;
-    }
-
-    // Sampling: collect CAL_ITERATION samples to average the offset
-    if (hfoc->cal_state == CAL_STATE_SAMPLING) {
-        if (hfoc->cal_sample_count < CAL_ITERATION) {
-            hfoc->cal_rad_offset_sum += DEG_TO_RAD(hfoc->ma732.angle_filtered);
-            hfoc->cal_sample_count++;
-        } else {
-            hfoc->cal_state = CAL_STATE_COMPLETE;
-        }
-        return;
-    }
-
-    // Offset done: store result, initialise LUT sweep
-    if (hfoc->cal_state == CAL_STATE_COMPLETE) {
-        hfoc->m_angle_offset = hfoc->cal_rad_offset_sum / (float)hfoc->cal_sample_count;
-
-        // Kick off CW sweep from step 0
-        hfoc->lut_cal_idx    = 0;
-        hfoc->lut_cal_cw_done = 0;
-        hfoc->lut_ready       = 0;
-
-        float e_cmd = 0.0f;  // step 0 → electrical angle 0
-        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, e_cmd);
-        hfoc->cal_start_time = HAL_GetTick();
-        hfoc->cal_state = CAL_STATE_LUT_SETTLING;
-        return;
-    }
-
-    // ── Phase 2: nonlinearity LUT ──────────────────────────────────────────
-
-    // Settling: hold commanded angle, wait LUT_SETTLE_MS before sampling
-    if (hfoc->cal_state == CAL_STATE_LUT_SETTLING) {
-        if (HAL_GetTick() - hfoc->cal_start_time >= LUT_SETTLE_MS) {
-            hfoc->cal_state = CAL_STATE_LUT_RECORDING;
-        }
-        return;
-    }
-
-    // Recording: measure error at current step, command next step
-    if (hfoc->cal_state == CAL_STATE_LUT_RECORDING) {
-        uint16_t idx = hfoc->lut_cal_idx;
-
-        // Ideal mechanical angle for this LUT slot
-        float m_ideal = (float)idx / (float)ERROR_LUT_SIZE * TWO_PI;
-
-        // Error = reported angle − ideal angle, wrapped to [-π, π]
-        float error = hfoc->m_angle_rad - m_ideal;
-        while (error >  PI) error -= TWO_PI;
-        while (error < -PI) error += TWO_PI;
-
-        if (!hfoc->lut_cal_cw_done) {
-            // CW pass: store directly
-            hfoc->encd_error_comp[idx] = error;
-        } else {
-            // CCW pass: average with CW result to cancel friction bias
-            hfoc->encd_error_comp[idx] = (hfoc->encd_error_comp[idx] + error) * 0.5f;
-        }
-
-        // Advance index
-        uint16_t next_idx;
-        if (!hfoc->lut_cal_cw_done) {
-            if (idx < ERROR_LUT_SIZE - 1) {
-                next_idx = idx + 1;             // continue CW
-            } else {
-                hfoc->lut_cal_cw_done = 1;
-                next_idx = ERROR_LUT_SIZE - 1;  // start CCW from the top
-            }
-        } else {
-            if (idx > 0) {
-                next_idx = idx - 1;             // continue CCW
-            } else {
-                // Both passes done
-                hfoc->cal_state = CAL_STATE_LUT_DONE;
-                return;
-            }
-        }
-        hfoc->lut_cal_idx = next_idx;
-
-        // Command next electrical angle and start settle timer
-        float next_e_cmd = ((float)next_idx / (float)ERROR_LUT_SIZE * TWO_PI)
-                           * (float)hfoc->pole_pairs;
-        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, next_e_cmd);
-        hfoc->cal_start_time = HAL_GetTick();
-        hfoc->cal_state = CAL_STATE_LUT_SETTLING;
-        return;
-    }
-
-    // LUT done: stop drive, mark LUT valid, enter ENCODER_MODE for verification
-    if (hfoc->cal_state == CAL_STATE_LUT_DONE) {
-        open_loop_voltage_control(hfoc, 0.0f, 0.0f, 0.0f);
-        hfoc->lut_ready     = 1;
-        hfoc->control_mode  = ENCODER_MODE;
-        hfoc->cal_state     = CAL_STATE_IDLE;
-    }
-}
-
-
-void foc_speed_control_update(foc_t *hfoc, float rpm_reference) {
+void foc_speed_control_update(foc_t *hfoc, float vel_reference) {
 	if (hfoc == NULL || (hfoc->control_mode != SPEED_CONTROL_MODE && hfoc->control_mode != POSITION_CONTROL_MODE)) {
 		hfoc->speed_ctrl.integral = 0.0f;
 		hfoc->speed_ctrl.last_error = 0.0f;
@@ -291,17 +126,17 @@ void foc_speed_control_update(foc_t *hfoc, float rpm_reference) {
 	}
 
     hfoc->id_ref = 0.0f;
-    hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, rpm_reference - hfoc->actual_rpm);
+    hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, vel_reference - hfoc->angle_sensor.actual_vel);
 }
 
 void foc_mit_control_update(foc_t *hfoc){
     if (hfoc == NULL) return;
     hfoc->id_ref = 0.0f;
-    float pos_error = hfoc->mit_cmd.des_pos - hfoc->m_angle_rad;
+    float pos_error = hfoc->mit_cmd.des_pos - hfoc->angle_sensor.m_angle_rad;
     // Wrap to [-π, π] so the controller always takes the shortest path
     while (pos_error >  PI) pos_error -= TWO_PI;
     while (pos_error < -PI) pos_error += TWO_PI;
-    float vel_error = hfoc->mit_cmd.des_vel - hfoc->actual_rpm;
+    float vel_error = hfoc->mit_cmd.des_vel - hfoc->angle_sensor.actual_vel;
     hfoc->iq_ref = hfoc->mit_cmd.kp * pos_error + hfoc->mit_cmd.kd * vel_error;
     // Cap iq_ref for safety
     hfoc->iq_ref = CONSTRAIN(hfoc->iq_ref, -10.0f, 10.0f);
@@ -312,21 +147,16 @@ void foc_update_position_velocity(foc_t *hfoc, float Ts) {
         return;
     }
 
-    // Update electrical angle from sensor
-    hfoc->e_rad = hfoc->e_angle_rad_comp;
-    
-    // Calculate actual RPM
-    hfoc->actual_rpm = MA732_get_rpm(&hfoc->ma732, Ts);
-    
-    // Handle sensor direction for RPM
-    if (hfoc->sensor_dir == REVERSE_DIR) {
-        hfoc->actual_rpm = -hfoc->actual_rpm;
-    }
+    // Latch the latest normalised electric angle for the current controller
+    hfoc->angle_sensor.e_rad = hfoc->angle_sensor.e_angle_rad_comp;
+
+    // Compute mechanical velocity in rad/s from LUT-corrected angle delta
+    angle_sensor_update_velocity(&hfoc->angle_sensor, Ts);
 
     // Restart SPI read if data is ready
     if (MA732_get_val_flag()) {
         MA732_reset_val_flag();
-        MA732_start(&hfoc->ma732);
+        MA732_start(&hfoc->angle_sensor.ma732);
     }
 }
 
@@ -375,7 +205,7 @@ void foc_current_control_update(foc_t *hfoc, float Ts) {
     iq_ref = CONSTRAIN(iq_ref, -hfoc->max_current, hfoc->max_current);
 
     // pre calculate sin & cos
-    pre_calc_sin_cos(hfoc->e_rad, &sin_theta, &cos_theta);
+    pre_calc_sin_cos(hfoc->angle_sensor.e_rad, &sin_theta, &cos_theta);
     // pre_calc_sin_cos(0.0f, &sin_theta, &cos_theta);
 
     clarke_transform(ia, ib, &i_alpha, &i_beta);

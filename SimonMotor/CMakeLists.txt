@@ -53,6 +53,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/MotorControl/Src/MA732.c
     Libraries/MotorControl/Src/FOC_math.c
     Libraries/MotorControl/Src/foc.c
+    Libraries/MotorControl/Src/foc_calibration.c
+    Libraries/MotorControl/Src/angle_sensor.c
     Libraries/MotorControl/Src/pid_utils.c
 )
 

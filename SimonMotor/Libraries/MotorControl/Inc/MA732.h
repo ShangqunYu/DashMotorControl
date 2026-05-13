@@ -73,6 +73,5 @@ extern _Bool encd_get_val_flag;
 int MA732_config(MA732_t *encd, SPI_HandleTypeDef *hspi);
 int MA732_start(MA732_t *encd);
 float MA732_get_degree(MA732_t *encd);
-float MA732_get_rpm(MA732_t *encd, float Ts);
 
 #endif /* MA732_DRIVER_INC_MA732_H_ */

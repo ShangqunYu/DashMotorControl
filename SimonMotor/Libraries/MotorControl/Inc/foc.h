@@ -8,15 +8,12 @@
 #ifndef FOC_INC_FOC_H_
 #define FOC_INC_FOC_H_
 
-
-#include "MA732.h"
 #include <stdint.h>
 #include "pid_utils.h"
 #include "lpf.h"
 #include "FOC_math.h"
-
-#define ERROR_LUT_SIZE  (1024)
-#define LUT_SETTLE_MS   (10U)   // ms to wait at each LUT step before sampling
+#include "hw_config.h"
+#include "angle_sensor.h"      /* AngleSensor_t, dir_mode_t */
 
 
 typedef struct{
@@ -68,10 +65,6 @@ typedef enum {
 }motor_mode_t;
 
 typedef enum {
-	NORMAL_DIR, REVERSE_DIR
-}dir_mode_t;
-
-typedef enum {
   RS, LD, LQ
 }inject_taregt_t;
 
@@ -94,31 +87,15 @@ typedef struct {
 } MIT_CMD;
 
 typedef struct {
-	MA732_t ma732;
+	AngleSensor_t angle_sensor;  /* MA732 + all angle/velocity state */
 	foc_mode_t foc_mode;
     CurrentSensor current_sensor;
-	uint8_t pole_pairs;
 	float kv;
 	float Rs;
 	float Ld;
 	float Lq;
 	float max_current;
 	float flux_linkage;
-
-	float meas_inj_freq;
-	float meas_inj_amp;
-	float meas_inj_omega;
-	inject_taregt_t meas_inj_target;
-	int meas_inj_n;
-	_Bool meas_inj_start_flag;
-
-	float m_angle_rad;     // mechanical angle (LUT-compensated when lut_ready)
-	float m_angle_rad_raw; // mechanical angle before LUT correction (always available)
-	float e_angle_rad; // electrical angle
-	float e_angle_rad_comp; // electrical angle
-	float m_angle_offset;
-	float e_rad;
-	float last_e_rad;
 
 	float vd, vq;
 	float id, iq;
@@ -130,14 +107,9 @@ typedef struct {
 	float v_bus;
 	float i_bus;
 
-	float rpm_temp;
-	float actual_rpm;
-	float actual_angle;
-	int32_t m_angle_overflow_count;
-
 	float I_ctrl_bandwidth;
 	float id_ref, iq_ref;
-	float rpm_ref;
+	float vel_ref;   // velocity reference in rad/s
 
     uint8_t loop_count;
 
@@ -146,8 +118,6 @@ typedef struct {
 	motor_mode_t control_mode;
 
 	float gear_ratio;
-	dir_mode_t sensor_dir;
-
 
 	SecondOrderLPF id_lpf;
 	SecondOrderLPF iq_lpf;
@@ -167,41 +137,18 @@ typedef struct {
 	int sample_index;
 	_Bool collect_sample_flag;
 
-	// Calibration state machine
-	enum {
-		CAL_STATE_IDLE,
-		CAL_STATE_SETTLING,       // waiting for rotor to lock at 0 before offset sampling
-		CAL_STATE_SAMPLING,       // collecting offset samples
-		CAL_STATE_COMPLETE,       // offset done, kick off LUT sweep
-		CAL_STATE_LUT_SETTLING,   // waiting for rotor to settle at current LUT step
-		CAL_STATE_LUT_RECORDING,  // sample angle error for current LUT step
-		CAL_STATE_LUT_DONE,       // both CW and CCW sweeps finished
-	} cal_state;
-	uint32_t cal_start_time;
-	uint32_t cal_sample_count;
-	float    cal_rad_offset_sum;
-
-	// Encoder nonlinearity compensation LUT (filled during calibration)
-	float    encd_error_comp[ERROR_LUT_SIZE];
-	uint16_t lut_cal_idx;       // current step index (0 … ERROR_LUT_SIZE-1)
-	uint8_t  lut_cal_cw_done;   // 0 = CW pass in progress, 1 = CCW pass in progress
-	uint8_t  lut_ready;         // 1 once LUT is valid and should be applied
-
 	MIT_CMD mit_cmd;
-}foc_t;
+} foc_t;
+
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
-void foc_sensored_calc_electric_angle(foc_t *hfoc);
 void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv);
 void foc_sensor_init(foc_t *hfoc, float m_rad_offset, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);
-void foc_speed_control_update(foc_t *hfoc, float rpm_reference);
+void foc_speed_control_update(foc_t *hfoc, float vel_reference);
 void foc_update_position_velocity(foc_t *hfoc, float Ts);
 void foc_mit_control_update(foc_t *hfoc);
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad);
 void foc_current_control_update(foc_t *hfoc, float Ts);
-
-void foc_cal_encoder_misalignment_start(foc_t *hfoc);
-void foc_cal_encoder_misalignment_update(foc_t *hfoc, float Ts);
 
 #endif /* FOC_INC_FOC_H_ */

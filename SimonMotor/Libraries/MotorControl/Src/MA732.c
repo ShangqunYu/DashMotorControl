@@ -78,38 +78,3 @@ float MA732_get_degree(MA732_t *encd) {
 
     return encd->angle_filtered;
 }
-
-
-float MA732_get_rpm(MA732_t *encd, float Ts) {
-    // Handle angle wrap-around (optimized)
-    float angle_diff = encd->angle_filtered - encd->prev_angle;
-    angle_diff -= 360.0f * floorf((angle_diff + 180.0f) * (1.0f/360.0f));
-    encd->prev_angle = encd->angle_filtered;
-
-    // Calculate RPM
-    float rpm_instant = (angle_diff * 60.0f) / (Ts * DEGREES_PER_REV);
-
-    // Two-stage spike rejection
-    float rpm_delta = rpm_instant - encd->prev_rpm;
-    float abs_delta = fabsf(rpm_delta);
-
-    if (abs_delta > MAX_RPM_JUMP) {
-        // Gradual rejection with 50% of the delta, capped at MAX_RPM_JUMP
-        float limited_delta = copysignf(fminf(abs_delta * 0.5f, MAX_RPM_JUMP), rpm_delta);
-        rpm_instant = encd->prev_rpm + limited_delta;
-    }
-
-    // IIR Filter with dynamic weighting
-    float filtered = encd->filtered_rpm * (1.0f - RPM_FILTER_ALPHA) + rpm_instant * RPM_FILTER_ALPHA;
-
-    // Very low RPM clamping (0.1 RPM resolution)
-    if (fabsf(filtered) < 0.1f) {
-        filtered = 0.0f;
-    }
-
-    // Update state
-    encd->prev_rpm = rpm_instant;
-    encd->filtered_rpm = filtered;
-
-    return encd->filtered_rpm;
-}
