@@ -23,10 +23,7 @@
 /* ── Calibration state machine ───────────────────────────────────────────── */
 typedef enum {
     CAL_STATE_IDLE,
-    CAL_STATE_SETTLING,              // rotor lock at e=0 before offset sampling
-    CAL_STATE_SAMPLING,              // collecting offset samples
-    CAL_STATE_COMPLETE,              // offset done, start LUT sweep
-    CAL_STATE_LUT_SETTLING,          // lock at e=0 for T1 before sweep
+    CAL_STATE_LUT_SETTLING,          // lock at e=0 for 1 s before sweep
     CAL_STATE_LUT_CW,                // rotating CW at W_CAL, collecting raw samples
     CAL_STATE_LUT_CCW,               // rotating CCW at W_CAL, averaging raw samples
     CAL_STATE_LUT_POSTPROC_PENDING,  // sweeps done; main loop calls foc_cal_lut_postprocess()
@@ -36,8 +33,6 @@ typedef enum {
 typedef struct {
     cal_state_t cal_state;
     uint32_t    cal_start_time;
-    uint32_t    cal_sample_count;
-    float       cal_rad_offset_sum;
 
     float       lut_raw[LUT_NUM_SAMPLES];  // intermediate CW/CCW-averaged raw samples
     uint16_t    lut_cal_idx;               // current sample index during sweep

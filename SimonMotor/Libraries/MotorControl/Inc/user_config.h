@@ -37,7 +37,8 @@ extern "C" {
 #define V_MAX					__float_reg[22]									// Velocity setpoint upper bound (rad/s)
 #define KP_MAX					__float_reg[23]									// Max position gain (N-m/rad)
 #define KD_MAX					__float_reg[24]									// Max velocity gain (N-m/rad/s)
-#define M_ANGLE_OFFSET			__float_reg[25]									// Mechanical angle offset (rad), saved after encoder calibration
+#define E_ZERO_RAD				__float_reg[25]									// Electrical zero offset (rad), saved after encoder calibration
+#define M_ZERO_RAD				__float_reg[26]									// Mechanical zero (rad), set by user via SET_ZERO_MODE
 
 
 #define PHASE_ORDER             __int_reg[0]                                    // Phase swapping during calibration

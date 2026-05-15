@@ -28,6 +28,7 @@ CALIBRATION_MODE     = 3
 MIT_MODE             = 4
 POWER_UP_MODE        = 5
 ENCODER_MODE         = 6
+SET_ZERO_MODE        = 7
 
 def send_mode(bus, can_id, mode):
     msg = can.Message(
@@ -46,7 +47,7 @@ def main():
         sys.exit(f"Failed to open {CHANNEL}: {exc}")
 
     try:
-        send_mode(bus, CAN_ID, MIT_MODE)
+        send_mode(bus, CAN_ID, ENCODER_MODE)
     except Exception as exc:
         sys.exit(f"Send failed: {exc}")
     finally:

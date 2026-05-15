@@ -61,7 +61,8 @@ typedef enum {
 	CALIBRATION_MODE,
 	MIT_MODE,
 	POWER_UP_MODE,
-	ENCODER_MODE,   // motor coast; prints raw vs LUT-compensated angle for verification
+	ENCODER_MODE,    // motor coast; prints raw vs LUT-compensated angle for verification
+	SET_ZERO_MODE,   // capture current position as mechanical zero, then return to ENCODER_MODE
 }motor_mode_t;
 
 typedef enum {
@@ -142,7 +143,7 @@ typedef struct {
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
 void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv);
-void foc_sensor_init(foc_t *hfoc, float m_rad_offset, dir_mode_t sensor_dir);
+void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);
 void foc_speed_control_update(foc_t *hfoc, float vel_reference);

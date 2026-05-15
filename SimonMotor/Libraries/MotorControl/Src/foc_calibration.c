@@ -1,20 +1,21 @@
 /*
  * foc_calibration.c
  *
- * Encoder offset + nonlinearity LUT calibration (Ben Katz method).
+ * Encoder nonlinearity LUT calibration (Ben Katz method).
  *
- * Phase 1 – offset:
- *   Lock rotor at electrical angle 0, average CAL_ITERATION raw angle
- *   readings to find m_angle_offset.
+ * Phase 1 – LUT sweep:
+ *   Lock rotor at e=0 for 1 s, then rotate CW then CCW at W_CAL (electrical
+ *   rad/s).  CW and CCW samples are averaged to cancel friction bias.
  *
- * Phase 2 – LUT sweep:
- *   Rotate CW then CCW at constant W_CAL (electrical rad/s), collecting
- *   LUT_SAMPLES_PER_PPAIR samples per pole-pair.  CW and CCW are averaged
- *   to cancel friction bias.
+ * Phase 2 – post-processing (call foc_cal_lut_postprocess from main loop):
+ *   Compute ezero = mean(all raw errors).  This is the electrical zero —
+ *   the DC offset between the encoder's natural zero and e=0.  It becomes
+ *   e_zero so that m_angle_rad = 0 aligns with e=0 at runtime.
+ *   The LUT stores only the residual nonlinearity (errors - ezero), which
+ *   is the same approach as Ben Katz's calibration.
  *
- * Phase 3 – post-processing (call foc_cal_lut_postprocess from main loop):
- *   Resample raw errors onto the ERROR_LUT_SIZE grid with a moving-average
- *   window of one pole-pair width, which cancels cogging-torque ripple.
+ * Note: mechanical zero (user-facing position reference) is independent and
+ * can be zeroed separately after calibration.
  */
 
 #include "foc_calibration.h"
@@ -24,56 +25,18 @@
 void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal) {
     if (hfoc == NULL || hcal == NULL) return;
 
-    hcal->cal_state          = CAL_STATE_SETTLING;
-    hcal->cal_start_time     = HAL_GetTick();
-    hcal->cal_sample_count   = 0;
-    hcal->cal_rad_offset_sum = 0.0f;
+    // Clear any previous offset — sweep samples raw angle so offset must be 0
+    hfoc->angle_sensor.e_zero = 0.0f;
+    hfoc->angle_sensor.lut_ready      = 0;
+
+    hcal->cal_state    = CAL_STATE_LUT_SETTLING;
+    hcal->cal_start_time = HAL_GetTick();
 
     open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, 0.0f);
 }
 
 void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts) {
     if (hfoc == NULL || hcal == NULL) return;
-
-    uint32_t elapsed_time = HAL_GetTick() - hcal->cal_start_time;
-
-    // ── Phase 1: offset calibration ────────────────────────────────────────
-
-    // Settling: wait 1 s for rotor to lock at electrical angle 0
-    if (hcal->cal_state == CAL_STATE_SETTLING) {
-        if (elapsed_time >= 1000) {
-            hcal->cal_state          = CAL_STATE_SAMPLING;
-            hcal->cal_start_time     = HAL_GetTick();
-            hcal->cal_sample_count   = 0;
-            hcal->cal_rad_offset_sum = 0.0f;
-        }
-        return;
-    }
-
-    // Sampling: collect CAL_ITERATION samples and average for the offset
-    if (hcal->cal_state == CAL_STATE_SAMPLING) {
-        if (hcal->cal_sample_count < CAL_ITERATION) {
-            hcal->cal_rad_offset_sum += DEG_TO_RAD(hfoc->angle_sensor.ma732.angle_filtered);
-            hcal->cal_sample_count++;
-        } else {
-            hcal->cal_state = CAL_STATE_COMPLETE;
-        }
-        return;
-    }
-
-    // Offset done: store result, lock at e=0, start LUT settle timer
-    if (hcal->cal_state == CAL_STATE_COMPLETE) {
-        hfoc->angle_sensor.m_angle_offset = hcal->cal_rad_offset_sum / (float)hcal->cal_sample_count;
-        hcal->lut_cal_idx                 = 0;
-        hfoc->angle_sensor.lut_ready      = 0;  // clear old LUT until sweep completes
-        hcal->lut_theta_ref               = 0.0f;
-        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, 0.0f);
-        hcal->cal_start_time              = HAL_GetTick();
-        hcal->cal_state                   = CAL_STATE_LUT_SETTLING;
-        return;
-    }
-
-    // ── Phase 2: nonlinearity LUT (Ben Katz method) ────────────────────────
 
     // LUT_SETTLING: hold at e=0 for 1 s before starting the sweep
     if (hcal->cal_state == CAL_STATE_LUT_SETTLING) {
@@ -144,6 +107,10 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
 }
 
 // ── Post-processing (call from main loop, NOT from an ISR) ─────────────────
+// ezero = mean(lut_raw) is the electrical zero — the DC offset between
+// the encoder's natural zero and electrical angle 0.  It is stored as
+// e_zero so runtime angle reading is anchored to e=0.
+// The LUT then holds only the residual nonlinearity (errors - ezero).
 void foc_cal_lut_postprocess(foc_t *hfoc, CalStruct *hcal) {
     if (hfoc == NULL || hcal == NULL || hcal->cal_state != CAL_STATE_LUT_POSTPROC_PENDING)
         return;
@@ -152,12 +119,16 @@ void foc_cal_lut_postprocess(foc_t *hfoc, CalStruct *hcal) {
     const int n_lut  = (int)ERROR_LUT_SIZE;
     const int window = (int)LUT_SAMPLES_PER_PPAIR;
 
-    // 1. DC bias removal
+    // 1. ezero = mean of all errors = electrical zero offset (rad)
     float ezero = 0.0f;
     for (int i = 0; i < n; i++) ezero += hcal->lut_raw[i];
     ezero /= (float)n;
 
+    // Store as e_zero:
+    hfoc->angle_sensor.e_zero = ezero;
+
     // 2. Resample onto LUT grid with moving-average filter (one pole-pair window)
+    //    Subtracting ezero leaves only nonlinearity.
     for (int i = 0; i < n_lut; i++) {
         int center = (int)((float)i * (float)n / (float)n_lut);
         float avg = 0.0f;

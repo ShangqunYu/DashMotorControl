@@ -90,10 +90,10 @@ void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv) {
 	hfoc->kv = kv;
 }
 
-void foc_sensor_init(foc_t *hfoc, float m_rad_offset, dir_mode_t sensor_dir) {
+void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir) {
 	if (hfoc == NULL) return;
 
-	hfoc->angle_sensor.m_angle_offset = m_rad_offset;
+	hfoc->angle_sensor.e_zero = e_zero_rad;
 	hfoc->angle_sensor.sensor_dir = sensor_dir;
 }
 

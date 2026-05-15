@@ -9,13 +9,14 @@
 
 void angle_sensor_init(AngleSensor_t *sensor,
                        uint8_t        pole_pairs,
-                       float          m_rad_offset,
+                       float          e_zero_rad,
                        dir_mode_t     sensor_dir)
 {
     if (sensor == NULL) return;
 
     sensor->pole_pairs       = pole_pairs;
-    sensor->m_angle_offset   = m_rad_offset;
+    sensor->e_zero           = e_zero_rad;
+    sensor->m_zero           = 0.0f;
     sensor->sensor_dir       = sensor_dir;
     sensor->m_angle_rad      = 0.0f;
     sensor->m_angle_rad_raw  = 0.0f;
@@ -45,39 +46,54 @@ void angle_sensor_update(AngleSensor_t *sensor)
 {
     if (sensor == NULL) return;
 
-    float angle_deg = MA732_get_degree(&sensor->ma732);
+    float raw_rad = DEG_TO_RAD(MA732_get_degree(&sensor->ma732));
 
-    // Offset-corrected mechanical angle
-    sensor->m_angle_rad = DEG_TO_RAD(angle_deg) - sensor->m_angle_offset;
-    norm_angle_rad(&sensor->m_angle_rad);
-    sensor->m_angle_rad_raw = sensor->m_angle_rad;  // snapshot before LUT correction
+    // Angle referenced to electrical zero — used for LUT lookup and e_angle
+    float angle_from_ezero = raw_rad - sensor->e_zero;
+    norm_angle_rad(&angle_from_ezero);
 
-    // Apply encoder nonlinearity correction via interpolated LUT
+    // Raw user position (before LUT correction, for comparison in ENCODER_MODE)
+    sensor->m_angle_rad_raw = angle_from_ezero - sensor->m_zero;
+    norm_angle_rad(&sensor->m_angle_rad_raw);
+
+    // Apply LUT nonlinearity correction (indexed by angle from e_zero)
     if (sensor->lut_ready) {
-        float lut_idx_f = (sensor->m_angle_rad / TWO_PI) * (float)ERROR_LUT_SIZE;
-        int   idx0      = (int)lut_idx_f;
-        int   idx1      = (idx0 + 1) % (int)ERROR_LUT_SIZE;
-        float frac      = lut_idx_f - (float)idx0;
+        float lut_idx_f  = (angle_from_ezero / TWO_PI) * (float)ERROR_LUT_SIZE;
+        int   idx0       = (int)lut_idx_f;
+        int   idx1       = (idx0 + 1) % (int)ERROR_LUT_SIZE;
+        float frac       = lut_idx_f - (float)idx0;
         float correction = sensor->encd_error_comp[idx0] * (1.0f - frac)
                          + sensor->encd_error_comp[idx1] * frac;
-        sensor->m_angle_rad -= correction;
-        norm_angle_rad(&sensor->m_angle_rad);
+        angle_from_ezero -= correction;
+        norm_angle_rad(&angle_from_ezero);
     }
 
-    // Electric angle (un-normalised)
-    float e_rad = sensor->m_angle_rad * (float)sensor->pole_pairs;
+    // User-facing position: corrected angle minus user-defined mechanical zero
+    sensor->m_angle_rad = angle_from_ezero - sensor->m_zero;
+    norm_angle_rad(&sensor->m_angle_rad);
 
+    // Electrical angle (from e_zero, not m_zero — FOC must stay anchored to e_zero)
+    float e_rad = angle_from_ezero * (float)sensor->pole_pairs;
     if (sensor->sensor_dir == REVERSE_DIR) {
         e_rad = TWO_PI - e_rad;
     }
-
     sensor->e_angle_rad = e_rad;
-
-    // Normalised electric angle used by the current controller
     norm_angle_rad(&e_rad);
     sensor->e_angle_rad_comp = e_rad;
 
     MA732_set_val_flag();
+}
+
+void angle_sensor_set_m_zero(AngleSensor_t *sensor)
+{
+    if (sensor == NULL) return;
+
+    // m_angle_rad = angle_from_ezero - m_zero
+    // To make current position = 0: new m_zero = angle_from_ezero = m_zero + m_angle_rad
+    sensor->m_zero += sensor->m_angle_rad;
+    norm_angle_rad(&sensor->m_zero);
+    sensor->m_angle_rad     = 0.0f;
+    sensor->m_angle_rad_raw = 0.0f;
 }
 
 void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
@@ -92,7 +108,7 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
     // Instantaneous velocity in rad/s
     float vel_instant = delta / Ts;
 
-    // Two-stage spike rejection (same logic as MA732 RPM filter)
+    // Two-stage spike rejection
     float vel_delta = vel_instant - sensor->prev_vel;
     float abs_delta = fabsf(vel_delta);
     if (abs_delta > MAX_VEL_JUMP) {
@@ -104,7 +120,6 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
     float filtered = sensor->filtered_vel * (1.0f - VEL_FILTER_ALPHA)
                    + vel_instant          * VEL_FILTER_ALPHA;
 
-    // Clamp near-zero noise to exactly 0
     if (fabsf(filtered) < VEL_ZERO_THRESH) {
         filtered = 0.0f;
     }
@@ -112,6 +127,5 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
     sensor->prev_vel     = vel_instant;
     sensor->filtered_vel = filtered;
 
-    // Apply direction sign
     sensor->actual_vel = (sensor->sensor_dir == REVERSE_DIR) ? -filtered : filtered;
 }

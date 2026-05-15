@@ -31,11 +31,12 @@ typedef enum {
 typedef struct {
     MA732_t ma732;
 
-    float m_angle_rad;       // mechanical angle (LUT-compensated when lut_ready)
-    float m_angle_rad_raw;   // mechanical angle before LUT correction
+    float m_angle_rad;       // user position (LUT-corrected, relative to m_zero)
+    float m_angle_rad_raw;   // user position before LUT correction (same reference, for comparison)
     float e_angle_rad;       // un-normalised electric angle
     float e_angle_rad_comp;  // normalised electric angle (used by current control)
-    float m_angle_offset;    // mechanical offset set during calibration
+    float e_zero;            // electrical zero (rad): encoder reading when e=0, from calibration
+    float m_zero;            // mechanical zero (rad): user-defined position reference
     float e_rad;             // electric angle latched each FOC cycle
     float last_e_rad;
 
@@ -57,7 +58,7 @@ typedef struct {
 // Initialise scalar fields; MA732 must be configured separately via MA732_config().
 void angle_sensor_init(AngleSensor_t *sensor,
                        uint8_t        pole_pairs,
-                       float          m_rad_offset,
+                       float          e_zero_rad,
                        dir_mode_t     sensor_dir);
 
 // Copy a processed correction LUT into the sensor and mark it active.
@@ -73,5 +74,9 @@ void angle_sensor_update(AngleSensor_t *sensor);
 // Compute mechanical velocity in rad/s from the delta of m_angle_rad.
 // Call once per FOC cycle (Ts = FOC sample period in seconds).
 void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts);
+
+// Capture the current position as the mechanical zero.
+// After this call m_angle_rad == 0; save m_zero to flash from the main loop.
+void angle_sensor_set_m_zero(AngleSensor_t *sensor);
 
 #endif /* ANGLE_SENSOR_INC_ANGLE_SENSOR_H_ */

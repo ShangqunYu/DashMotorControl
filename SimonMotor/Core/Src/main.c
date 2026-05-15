@@ -188,6 +188,10 @@ static void foc_loop(void) {
       // Raw vs compensated comparison is printed in the main loop.
       open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
       break;
+    case SET_ZERO_MODE:
+      // Coast while main loop captures zero and saves to flash
+      open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
+      break;
     case POWER_UP_MODE:
       // open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
       break;
@@ -348,11 +352,13 @@ int main(void)
 
   // Load encoder calibration from flash if a previous calibration was saved
   if (CALIBRATION_DONE_FLAG == 1) {
-    hfoc.angle_sensor.m_angle_offset = M_ANGLE_OFFSET;
+    hfoc.angle_sensor.e_zero = E_ZERO_RAD;
+    hfoc.angle_sensor.m_zero = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
     memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
            sizeof(hfoc.angle_sensor.encd_error_comp));
     hfoc.angle_sensor.lut_ready = 1;
-    printf("Encoder cal loaded: offset=%.4f rad\r\n", hfoc.angle_sensor.m_angle_offset);
+    printf("Encoder cal loaded: e_zero=%.4f rad, m_zero=%.4f rad\r\n",
+           hfoc.angle_sensor.e_zero, hfoc.angle_sensor.m_zero);
   }
 
   hfoc.control_mode = POWER_UP_MODE;
@@ -365,13 +371,24 @@ int main(void)
     HAL_Delay(10);
 
     // Post-process LUT after sweeps finish (1024×128 ops – must run outside ISR)
+    if (hfoc.control_mode == SET_ZERO_MODE) {
+      angle_sensor_set_m_zero(&hfoc.angle_sensor);
+      M_ZERO_RAD = hfoc.angle_sensor.m_zero;
+      if (!preference_writer_ready(prefs)) { preference_writer_open(&prefs); }
+      preference_writer_flush(&prefs);
+      preference_writer_close(&prefs);
+      preference_writer_load(prefs);
+      printf("Mechanical zero set: m_zero=%.4f rad\r\n", hfoc.angle_sensor.m_zero);
+      hfoc.control_mode = ENCODER_MODE;
+    }
+
     if (hcal.cal_state == CAL_STATE_LUT_POSTPROC_PENDING) {
       foc_cal_lut_postprocess(&hfoc, &hcal);
 
       // Persist LUT and angle offset to flash
       memcpy(&ENCODER_LUT, hfoc.angle_sensor.encd_error_comp,
              sizeof(hfoc.angle_sensor.encd_error_comp));
-      M_ANGLE_OFFSET = hfoc.angle_sensor.m_angle_offset;
+      E_ZERO_RAD = hfoc.angle_sensor.e_zero;
       CALIBRATION_DONE_FLAG = 1;
       if (!preference_writer_ready(prefs)) { preference_writer_open(&prefs); }
       preference_writer_flush(&prefs);
