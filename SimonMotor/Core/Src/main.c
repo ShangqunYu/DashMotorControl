@@ -350,13 +350,16 @@ int main(void)
          hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset);
 
   if (CALIBRATION_DONE_FLAG == 1) {
-    hfoc.angle_sensor.e_zero = E_ZERO_RAD;
-    hfoc.angle_sensor.m_zero = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
+    hfoc.angle_sensor.e_zero     = E_ZERO_RAD;
+    hfoc.angle_sensor.m_zero     = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
+    hfoc.angle_sensor.sensor_dir = (PHASE_ORDER == 1) ? REVERSE_DIR : NORMAL_DIR;
+    hfoc.angle_sensor.pole_pairs = ((uint8_t)PPAIRS > 0) ? (uint8_t)PPAIRS : POLE_PAIR;
     memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
            sizeof(hfoc.angle_sensor.encd_error_comp));
     hfoc.angle_sensor.lut_ready = 1;
-    printf("Encoder cal loaded: e_zero=%.4f rad, m_zero=%.4f rad\r\n",
-           hfoc.angle_sensor.e_zero, hfoc.angle_sensor.m_zero);
+    printf("Encoder cal loaded: e_zero=%.4f, ppairs=%d, dir=%s\r\n",
+           hfoc.angle_sensor.e_zero, hfoc.angle_sensor.pole_pairs,
+           (hfoc.angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
   }
 
   /* Init scheduler */
