@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
 #include "can.h"
 #include "dma.h"
@@ -96,6 +97,7 @@ volatile can_cmd_t g_can_cmd = {0};
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -339,18 +341,14 @@ int main(void)
   HAL_Delay(50);
   /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-
-
   drv_enable_gd(drv);
-  htim1.Instance->CCR1 = (uint32_t)(htim1.Instance->ARR * 0.0f);
-  htim1.Instance->CCR2 = (uint32_t)(htim1.Instance->ARR * 0.0f);
-  htim1.Instance->CCR3 = (uint32_t)(htim1.Instance->ARR * 0.0f);
+  htim1.Instance->CCR1 = 0u;
+  htim1.Instance->CCR2 = 0u;
+  htim1.Instance->CCR3 = 0u;
   CurrentSensor_calibrate(&hfoc.current_sensor, 1000U);
-  printf("ADC offsets: A=%d, B=%d\r\n", hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset);
+  printf("ADC offsets: A=%d, B=%d\r\n",
+         hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset);
 
-  // Load encoder calibration from flash if a previous calibration was saved
   if (CALIBRATION_DONE_FLAG == 1) {
     hfoc.angle_sensor.e_zero = E_ZERO_RAD;
     hfoc.angle_sensor.m_zero = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
@@ -361,71 +359,15 @@ int main(void)
            hfoc.angle_sensor.e_zero, hfoc.angle_sensor.m_zero);
   }
 
-  hfoc.control_mode = POWER_UP_MODE;
-  while (1)
-  {
-    /* USER CODE END WHILE */
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
 
-    /* USER CODE BEGIN 3 */
+  /* Start scheduler */
+  osKernelStart();
 
-    HAL_Delay(10);
-
-    // Post-process LUT after sweeps finish (1024×128 ops – must run outside ISR)
-    if (hfoc.control_mode == SET_ZERO_MODE) {
-      angle_sensor_set_m_zero(&hfoc.angle_sensor);
-      M_ZERO_RAD = hfoc.angle_sensor.m_zero;
-      if (!preference_writer_ready(prefs)) { preference_writer_open(&prefs); }
-      preference_writer_flush(&prefs);
-      preference_writer_close(&prefs);
-      preference_writer_load(prefs);
-      printf("Mechanical zero set: m_zero=%.4f rad\r\n", hfoc.angle_sensor.m_zero);
-      hfoc.control_mode = ENCODER_MODE;
-    }
-
-    if (hcal.cal_state == CAL_STATE_LUT_POSTPROC_PENDING) {
-      foc_cal_lut_postprocess(&hfoc, &hcal);
-
-      // Persist LUT and angle offset to flash
-      memcpy(&ENCODER_LUT, hfoc.angle_sensor.encd_error_comp,
-             sizeof(hfoc.angle_sensor.encd_error_comp));
-      E_ZERO_RAD = hfoc.angle_sensor.e_zero;
-      CALIBRATION_DONE_FLAG = 1;
-      if (!preference_writer_ready(prefs)) { preference_writer_open(&prefs); }
-      preference_writer_flush(&prefs);
-      preference_writer_close(&prefs);
-      preference_writer_load(prefs);
-      printf("LUT calibration complete, saved to flash\r\n");
-    }
-
-    // drv_print_faults(drv);
-    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
-
-    if (hfoc.control_mode == ENCODER_MODE) {
-      printf("m_angle_raw: %.4f\r\n", hfoc.angle_sensor.m_angle_rad_raw);
-      printf("m_angle_comp: %.4f\r\n", hfoc.angle_sensor.m_angle_rad);
-    }
-    // printf("i_a: %.3f\r\n", hfoc.current_sensor.ia_filtered);
-    // printf("i_b: %.3f\r\n", hfoc.current_sensor.ib_filtered);
-    // printf("i_c: %.3f\r\n", hfoc.current_sensor.ic_filtered);
-    // printf("id: %.3f\r\n", hfoc.id);
-    // printf("id_des: %.3f\r\n", hfoc.id_ref);
-    // printf("id_filt: %.3f\r\n", hfoc.id);
-    // printf("iq: %.3f\r\n", hfoc.iq);
-    // printf("i_q_des: %.3f\r\n", hfoc.iq_ref);
-    // printf("i_q_filt: %.3f\r\n", hfoc.iq);
-    // printf("m_angle: %.3f\r\n", hfoc.angle_sensor.m_angle_rad);
-    // printf("des_pos: %.3f\r\n", hfoc.mit_cmd.des_pos);
-    // printf("e_angle: %.3f\r\n", hfoc.angle_sensor.e_angle_rad);
-    // printf("vel: %.3f\r\n", hfoc.angle_sensor.actual_vel);
-    // printf("vel_ref: %.3f\r\n", hfoc.vel_ref);
-    if (pose_ready)
-    {
-
-      pose_ready = false;
-
-    }
-  }
-  /* USER CODE END 3 */
+  /* We should never get here as control is now taken by the scheduler */
+  Error_Handler();
 }
 
 /**
@@ -559,6 +501,28 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
   
 }
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
