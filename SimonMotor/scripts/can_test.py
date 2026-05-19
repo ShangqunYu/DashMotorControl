@@ -47,7 +47,7 @@ def main():
         sys.exit(f"Failed to open {CHANNEL}: {exc}")
 
     try:
-        send_mode(bus, CAN_ID, ENCODER_MODE)
+        send_mode(bus, CAN_ID, POWER_UP_MODE)
     except Exception as exc:
         sys.exit(f"Send failed: {exc}")
     finally:

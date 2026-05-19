@@ -25,6 +25,15 @@
 #include <math.h>
 #include <stdio.h>
 
+// Drive id=I_CAL, iq=0 at a forced electrical angle — used during calibration
+// sweeps so the PI loop regulates current instead of applying raw voltage.
+static void cal_force_current(foc_t *hfoc, float angle_rad, float Ts) {
+    hfoc->angle_sensor.e_rad = angle_rad;
+    hfoc->id_ref = I_CAL;
+    hfoc->iq_ref = 0.0f;
+    foc_current_control_update(hfoc, Ts);
+}
+
 void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal) {
     if (hfoc == NULL || hcal == NULL) return;
 
@@ -38,7 +47,7 @@ void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal) {
     hcal->cal_state        = CAL_STATE_PHASE_SETTLING;
     hcal->cal_start_time   = HAL_GetTick();
 
-    open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, 0.0f);
+    foc_current_control_update(hfoc, 0.0f);  // reset PI integrators
     printf("Calibration started: settling...\r\n");
 }
 
@@ -47,6 +56,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
 
     // ── Phase 0a: hold at e=0 until rotor stops moving ───────────────────────
     if (hcal->cal_state == CAL_STATE_PHASE_SETTLING) {
+        cal_force_current(hfoc, 0.0f, Ts);
         if (HAL_GetTick() - hcal->cal_start_time >= 1000) {
             hcal->phase_raw_start = DEG_TO_RAD(hfoc->angle_sensor.ma732.angle_filtered);
             hcal->lut_theta_ref   = 0.0f;
@@ -58,10 +68,10 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
     // ── Phase 0b: rotate one electrical cycle CW ────────────────────────────
     if (hcal->cal_state == CAL_STATE_PHASE_DETECT) {
         hcal->lut_theta_ref += W_CAL * Ts;
-        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, hcal->lut_theta_ref);
+        cal_force_current(hfoc, hcal->lut_theta_ref, Ts);
 
         if (hcal->lut_theta_ref >= TWO_PI) {
-            // Hold voltage at 2π so the rotor can catch up before we measure
+            // Hold at 2π so the rotor can catch up before we measure
             hcal->cal_start_time = HAL_GetTick();
             hcal->cal_state      = CAL_STATE_PHASE_MEASURE;
         }
@@ -70,7 +80,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
 
     // ── Phase 0c: hold at 2π, let rotor settle, then measure ────────────────
     if (hcal->cal_state == CAL_STATE_PHASE_MEASURE) {
-        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, TWO_PI);
+        cal_force_current(hfoc, TWO_PI, Ts);
 
         if (HAL_GetTick() - hcal->cal_start_time >= 500) {
             float raw_end = DEG_TO_RAD(hfoc->angle_sensor.ma732.angle_filtered);
@@ -103,13 +113,13 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
             hcal->lut_theta_ref  = 0.0f;
             hcal->cal_start_time = HAL_GetTick();
             hcal->cal_state      = CAL_STATE_LUT_SETTLING;
-            open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, 0.0f);
         }
         return;
     }
 
     // ── Phase 1a: re-settle before LUT sweep ────────────────────────────────
     if (hcal->cal_state == CAL_STATE_LUT_SETTLING) {
+        cal_force_current(hfoc, 0.0f, Ts);
         if (HAL_GetTick() - hcal->cal_start_time >= 1000) {
             hcal->lut_theta_ref         = 0.0f;
             hcal->lut_next_sample_e_rad = 0.0f;
@@ -127,7 +137,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
     if (hcal->cal_state == CAL_STATE_LUT_CW) {
         hcal->lut_theta_ref += W_CAL * Ts;
         float angle_out = reversed ? -hcal->lut_theta_ref : hcal->lut_theta_ref;
-        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, angle_out);
+        cal_force_current(hfoc, angle_out, Ts);
 
         if (hcal->lut_theta_ref >= hcal->lut_next_sample_e_rad) {
             uint16_t idx = hcal->lut_cal_idx;
@@ -152,7 +162,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
     if (hcal->cal_state == CAL_STATE_LUT_CCW) {
         hcal->lut_theta_ref -= W_CAL * Ts;
         float angle_out = reversed ? -hcal->lut_theta_ref : hcal->lut_theta_ref;
-        open_loop_voltage_control(hfoc, VD_CAL, VQ_CAL, angle_out);
+        cal_force_current(hfoc, angle_out, Ts);
 
         if (hcal->lut_theta_ref <= hcal->lut_next_sample_e_rad) {
             uint16_t idx = hcal->lut_cal_idx;
@@ -209,6 +219,6 @@ void foc_cal_lut_postprocess(foc_t *hfoc, CalStruct *hcal) {
     }
 
     hfoc->angle_sensor.lut_ready = 1;
-    hfoc->control_mode           = ENCODER_MODE;
+    hfoc->control_mode           = POWER_UP_MODE;
     hcal->cal_state              = CAL_STATE_IDLE;
 }
