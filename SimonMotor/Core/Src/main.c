@@ -29,7 +29,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "motor_control.h"
 #include "hw_config.h"
 #include "user_config.h"
 #include "math_ops.h"
@@ -81,13 +80,10 @@ typedef struct {
 float __float_reg[64];
 int __int_reg[256];
 PreferenceWriter prefs;
-static MotorControlPid_t motor_pid;
 DRVStruct drv;
 foc_t hfoc;
 CalStruct hcal;
 
-
-static volatile uint16_t encoder_last_word = 0U;
 
 bool pose_ready = false;
 float rpm = 0.0f;
@@ -105,19 +101,6 @@ void MX_FREERTOS_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-
-float get_power_voltage(void) {
-	static float pv_filtered = 0.0f;
-  const float filter_alpha = 0.2f; 
-
-	// convert to volt
-	float pv = (float)ADC3->JDR1 * V_SCALE;
-
-  // Low-pass filter for noise reduction
-	pv_filtered = (1.0f - filter_alpha) * pv_filtered + filter_alpha * pv;
-
-	return pv_filtered;
-}
 
 
 static void foc_loop(void) {
@@ -271,7 +254,6 @@ int main(void)
   MX_TIM1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  MotorControl_InitPid(&motor_pid, 1.0f, 0.1f, 0.01f, -100.0f, 100.0f);
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
   if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
   {
@@ -339,7 +321,6 @@ int main(void)
 	// voltage sensor
 	HAL_ADCEx_InjectedStart_IT(&hadc3);
   HAL_Delay(50);
-  /* USER CODE END 2 */
 
   drv_enable_gd(drv);
   htim1.Instance->CCR1 = 0u;
@@ -361,6 +342,9 @@ int main(void)
            hfoc.angle_sensor.e_zero, hfoc.angle_sensor.pole_pairs,
            (hfoc.angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
   }
+  /* USER CODE END 2 */
+
+
 
   /* Init scheduler */
   osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */

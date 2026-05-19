@@ -14,44 +14,7 @@
 #include "FOC_math.h"
 #include "hw_config.h"
 #include "angle_sensor.h"      /* AngleSensor_t, dir_mode_t */
-
-
-typedef struct{
-	volatile uint32_t *adc_ia;
-	volatile uint32_t *adc_ib;
-    float current_scale;
-    int adc_a_offset;
-    int adc_b_offset;
-    float ia;
-    float ib;
-    float ic;
-	float ia_filtered;
-	float ib_filtered;
-	float ic_filtered;
-    volatile uint8_t offset_calibrating;
-    volatile uint32_t adc_a_offset_sum;
-    volatile uint32_t adc_b_offset_sum;
-    volatile uint32_t adc_offset_sample_count;
-}CurrentSensor;
-
-void CurrentSensor_init(CurrentSensor *sensor,
-                        volatile uint32_t *adc_ia,
-                        volatile uint32_t *adc_ib,
-                        float current_scale,
-                        int adc_a_offset,
-                        int adc_b_offset);
-void CurrentSensor_update(CurrentSensor *sensor);
-void CurrentSensor_begin_offset_calibration(CurrentSensor *sensor);
-void CurrentSensor_sample_offset(CurrentSensor *sensor);
-void CurrentSensor_end_offset_calibration(CurrentSensor *sensor);
-void CurrentSensor_calibrate(CurrentSensor *sensor, uint32_t duration_ms);
-
-typedef enum {
-	FOC_MODE_SENSORED,
-	FOC_MODE_SENSORLESS_SMO_HFI,
-	FOC_MODE_SENSORLESS_SMO_HFI_NEW,
-	FOC_MODE_HYBRID
-}foc_mode_t;
+#include "analog_sensor.h"     /* CurrentSensor */
 
 
 typedef enum {
@@ -89,7 +52,6 @@ typedef struct {
 
 typedef struct {
 	AngleSensor_t angle_sensor;  /* MA732 + all angle/velocity state */
-	foc_mode_t foc_mode;
     CurrentSensor current_sensor;
 	float kv;
 	float Rs;
@@ -146,6 +108,7 @@ void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv);
 void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);
+void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w);
 void foc_speed_control_update(foc_t *hfoc, float vel_reference);
 void foc_update_position_velocity(foc_t *hfoc, float Ts);
 void foc_mit_control_update(foc_t *hfoc);

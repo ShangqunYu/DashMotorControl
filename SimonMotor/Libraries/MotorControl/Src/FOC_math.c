@@ -6,6 +6,7 @@
  */
 
 #include "FOC_math.h"
+#include "hw_config.h"
 #include "math.h"
 
 float sin_lut_new[LUT_SIZE];
@@ -212,6 +213,31 @@ void svpwm(float valpha, float vbeta, float vbus, uint32_t pwm_period,
     *pwm_u = (*pwm_u > pwm_period) ? pwm_period : *pwm_u;
     *pwm_v = (*pwm_v > pwm_period) ? pwm_period : *pwm_v;
     *pwm_w = (*pwm_w > pwm_period) ? pwm_period : *pwm_w;
+}
+
+// ── Ben Katz method ──────────────────────────────────────────────────────────
+
+// Combined inverse DQ0 transform — produces three-phase voltages directly
+// from d/q references and electrical angle, skipping the intermediate α-β step.
+// Peak phase voltage amplitude = length of the dq vector.
+void abc(float theta, float d, float q, float *a, float *b, float *c) {
+    float cf = fast_cos(theta);
+    float sf = fast_sin(theta);
+    *a =  cf * d - sf * q;
+    *b =  (SQRT3_BY_TWO * sf - 0.5f * cf) * d - (-SQRT3_BY_TWO * cf - 0.5f * sf) * q;
+    *c = (-SQRT3_BY_TWO * sf - 0.5f * cf) * d - ( SQRT3_BY_TWO * cf - 0.5f * sf) * q;
+}
+
+// Space vector modulation via min-max midpoint zero-sequence injection.
+// Equivalent to classical sector-based SVPWM but branch-free.
+// Outputs float duty cycles in [DTC_MIN, DTC_MAX]; multiply by pwm_period for timer counts.
+void svm(float v_max, float u, float v, float w,
+         float *dtc_u, float *dtc_v, float *dtc_w) {
+    float v_offset  = (fminf(fminf(u, v), w) + fmaxf(fmaxf(u, v), w)) * 0.5f;
+    float v_mid     = 0.5f * (DTC_MAX + DTC_MIN);
+    *dtc_u = CONSTRAIN(0.5f * (u - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    *dtc_v = CONSTRAIN(0.5f * (v - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    *dtc_w = CONSTRAIN(0.5f * (w - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
 }
 
 // Operasi bilangan kompleks

@@ -44,7 +44,6 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    Libraries/MotorControl/Src/motor_control.c
     Libraries/MotorControl/Src/math_ops.c
     Libraries/MotorControl/Src/preference_writer.c
     Libraries/MotorControl/Src/stm32f4xx_flash.c
@@ -55,6 +54,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/MotorControl/Src/foc.c
     Libraries/MotorControl/Src/foc_calibration.c
     Libraries/MotorControl/Src/angle_sensor.c
+    Libraries/MotorControl/Src/analog_sensor.c
     Libraries/MotorControl/Src/pid_utils.c
 )
 

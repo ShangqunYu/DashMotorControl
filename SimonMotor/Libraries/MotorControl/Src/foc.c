@@ -11,76 +11,6 @@
 #include "hw_config.h"
 #include "tim.h"
 
-void CurrentSensor_init(CurrentSensor *sensor,
-                        volatile uint32_t *adc_ia,
-                        volatile uint32_t *adc_ib,
-                        float current_scale,
-                        int adc_a_offset,
-                        int adc_b_offset) {
-    sensor->adc_ia = adc_ia;
-    sensor->adc_ib = adc_ib;
-    sensor->current_scale = current_scale;
-    sensor->adc_a_offset = adc_a_offset;
-    sensor->adc_b_offset = adc_b_offset;
-    sensor->ia = 0.0f;
-    sensor->ib = 0.0f;
-    sensor->ic = 0.0f;
-    sensor->ia_filtered = 0.0f;
-    sensor->ib_filtered = 0.0f;
-    sensor->ic_filtered = 0.0f;
-    sensor->offset_calibrating = 0U;
-    sensor->adc_a_offset_sum = 0U;
-    sensor->adc_b_offset_sum = 0U;
-    sensor->adc_offset_sample_count = 0U;
-}
-
-void CurrentSensor_update(CurrentSensor *sensor) {
-    sensor->ia = -(sensor->adc_a_offset -(float)(*sensor->adc_ia)) * sensor->current_scale;
-    sensor->ib = -(sensor->adc_b_offset -(float)(*sensor->adc_ib)) * sensor->current_scale;
-    sensor->ic = -sensor->ia - sensor->ib;
-    // low-pass filter
-    sensor->ia_filtered = (1.0f - CURRENT_FILTER_ALPHA) * sensor->ia_filtered + CURRENT_FILTER_ALPHA * sensor->ia;
-    sensor->ib_filtered = (1.0f - CURRENT_FILTER_ALPHA) * sensor->ib_filtered + CURRENT_FILTER_ALPHA * sensor->ib;
-    sensor->ic_filtered = -sensor->ia_filtered - sensor->ib_filtered;
-}
-
-void CurrentSensor_begin_offset_calibration(CurrentSensor *sensor) {
-    sensor->offset_calibrating = 1U;
-    sensor->adc_a_offset_sum = 0U;
-    sensor->adc_b_offset_sum = 0U;
-    sensor->adc_offset_sample_count = 0U;
-}
-
-void CurrentSensor_sample_offset(CurrentSensor *sensor) {
-    if (sensor->offset_calibrating == 0U) {
-        return;
-    }
-    sensor->adc_a_offset_sum += *sensor->adc_ia;
-    sensor->adc_b_offset_sum += *sensor->adc_ib;
-    sensor->adc_offset_sample_count++;
-}
-
-void CurrentSensor_end_offset_calibration(CurrentSensor *sensor) {
-    sensor->offset_calibrating = 0U;
-
-    if (sensor->adc_offset_sample_count > 0U) {
-        sensor->adc_a_offset = (int)(sensor->adc_a_offset_sum / sensor->adc_offset_sample_count);
-        sensor->adc_b_offset = (int)(sensor->adc_b_offset_sum / sensor->adc_offset_sample_count);
-    }
-}
-
-void CurrentSensor_calibrate(CurrentSensor *sensor, uint32_t duration_ms) {
-    uint32_t start_tick = HAL_GetTick();
-
-    CurrentSensor_begin_offset_calibration(sensor);
-
-    while ((HAL_GetTick() - start_tick) < duration_ms) {
-        HAL_Delay(1);
-    }
-
-    CurrentSensor_end_offset_calibration(sensor);
-}
-
 void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv) {
 	if (hfoc == NULL || pole_pairs == 0 || kv <= 0) {
 		return;
@@ -110,6 +40,13 @@ void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc) {
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, da);
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, db);
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, dc);
+}
+
+void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w) {
+    uint32_t res = hfoc->pwm_resolution;
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, (uint32_t)(dtc_u * res));
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, (uint32_t)(dtc_v * res));
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, (uint32_t)(dtc_w * res));
 }
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit) {
@@ -190,9 +127,7 @@ void foc_current_control_update(foc_t *hfoc, float Ts) {
     float id_error = 0.0f, iq_error = 0.0f;
     float vd_ref = 0.0f, vq_ref = 0.0f;
 
-    uint32_t da, db, dc;
-    uint32_t pwm_res = hfoc->pwm_resolution;
-    const float pwm_to_v = v_bus / (float)pwm_res;
+    float dtc_u, dtc_v, dtc_w;
 
     // get currents
     // DRV8302_get_current(&hfoc->drv8302, &ia, &ib);
@@ -222,9 +157,10 @@ void foc_current_control_update(foc_t *hfoc, float Ts) {
     vd_ref = pi_control(&hfoc->id_ctrl, id_error);
     vq_ref = pi_control(&hfoc->iq_ctrl, iq_error);
 
-    inverse_park_transform(vd_ref, vq_ref, sin_theta, cos_theta, &hfoc->v_alpha, &hfoc->v_beta);
-    svpwm(hfoc->v_alpha, hfoc->v_beta, v_bus, pwm_res, &da, &db, &dc);
-    foc_set_pwm(hfoc, da, db, dc);
+    float va, vb, vc;
+    abc(hfoc->angle_sensor.e_rad, vd_ref, vq_ref, &va, &vb, &vc);
+    svm(v_bus, va, vb, vc, &dtc_u, &dtc_v, &dtc_w);
+    foc_set_pwm_dtc(hfoc, dtc_u, dtc_v, dtc_w);
     
 
     // copy to struct for debug
@@ -236,9 +172,9 @@ void foc_current_control_update(foc_t *hfoc, float Ts) {
     hfoc->id = id;
     hfoc->iq = iq;
 
-    hfoc->va = da * pwm_to_v;
-    hfoc->vb = db * pwm_to_v;
-    hfoc->vc = dc * pwm_to_v;
+    hfoc->va = dtc_u * v_bus;
+    hfoc->vb = dtc_v * v_bus;
+    hfoc->vc = dtc_w * v_bus;
     hfoc->vd = vd_ref;
     hfoc->vq = vq_ref;
 }
