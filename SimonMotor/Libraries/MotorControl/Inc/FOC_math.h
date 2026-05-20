@@ -57,9 +57,4 @@ void svpwm(float valpha, float vbeta, float vbus, uint32_t pwm_period,
 
 void vabc_to_vdq(float va, float vb, float vc, float sin_theta, float cos_theta, float *vd, float *vq);
 
-// Ben Katz method: combined inverse DQ0 + min-max SVPWM
-void abc(float theta, float d, float q, float *a, float *b, float *c);
-void svm(float v_max, float u, float v, float w,
-         float *dtc_u, float *dtc_v, float *dtc_w);
-
 #endif /* FOC_INC_FOC_MATH_H_ */

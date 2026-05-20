@@ -13,10 +13,9 @@
 #include "hw_config.h"
 #include "stm32f4xx_hal.h"
 
-#define HIGH_RES
 
 #define ANGLE_FILTER_ALPHA    0.71539f  //0.71539f //   // Faktor filter
-#define MAX_ANGLE_JUMP_DEG    50.0f   // Batas maksimal lonjakan sudut (derajat)
+#define MAX_ANGLE_JUMP_RAD    0.87266f  // 50 degrees in radians
 #define SPIKE_REJECT_COUNT    10       // Jumlah sampel untuk konfirmasi spike
 
 // Configurations (tune these based on your system)
@@ -31,13 +30,8 @@
 // #define ACTUAL_ANGLE_OFFSET (-75.0f)
 #define ACTUAL_ANGLE_FILTER_ALPHA 0.71539f
 
+#define ANGLE_SCALE_FACTOR   0.00009587379924f  // 2π / 65535.0f
 
-#ifdef HIGH_RES
-// #define ANGLE_SCALE_FACTOR    0.021973997F  // Pre-calculate scale factor (360.0f / 16383.0f)
-#define ANGLE_SCALE_FACTOR   0.00549324788f // re-calculate scale factor (360.0f / 65535.0f)
-#else
-#define ANGLE_SCALE_FACTOR    (360.0f / 4095.0f) 
-#endif
 
 
 typedef struct {
@@ -72,6 +66,6 @@ extern _Bool encd_get_val_flag;
 
 int MA732_config(MA732_t *encd, SPI_HandleTypeDef *hspi);
 int MA732_start(MA732_t *encd);
-float MA732_get_degree(MA732_t *encd);
+float MA732_get_rad(MA732_t *encd);
 
 #endif /* MA732_DRIVER_INC_MA732_H_ */

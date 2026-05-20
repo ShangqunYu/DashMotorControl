@@ -8,9 +8,7 @@
 #include "MA732.h"
 #include <string.h>
 #include <math.h>
-
-#define MA732_REG_ANGLE  0x3FFF
-#define MA732_WRITE_CMD  0x4000
+#include "math_ops.h"
 
 _Bool encd_get_val_flag = 0;
 
@@ -40,22 +38,17 @@ int MA732_start(MA732_t *encd) {
 }
 
 
-float MA732_get_degree(MA732_t *encd) {
+float MA732_get_rad(MA732_t *encd) {
     MA732_cs_set();
 
     const uint16_t raw_data = ((uint16_t)encd->spi_rx_buffer[1] << 8) | encd->spi_rx_buffer[0];
 
-
-#ifdef HIGH_RES
-    const float angle_raw = (float)(raw_data & 0xFFF0) * ANGLE_SCALE_FACTOR;
-#else
-    const float angle_raw = (float)((raw_data >> 2) & 0x0FFF) * ANGLE_SCALE_FACTOR;
-#endif
+    const float angle_raw = (float)(raw_data & 0xFFFF) * ANGLE_SCALE_FACTOR;
 
     float angle_diff = angle_raw - encd->prev_raw_angle;
-    angle_diff -= 360.0f * floorf((angle_diff + 180.0f) / 360.0f);
+    angle_diff -= TWO_PI_F * floorf((angle_diff + PI_F) / TWO_PI_F);
 
-    if (fabsf(angle_diff) > MAX_ANGLE_JUMP_DEG) {
+    if (fabsf(angle_diff) > MAX_ANGLE_JUMP_RAD) {
         if (++encd->spike_counter < SPIKE_REJECT_COUNT) {
             return encd->angle_filtered;
         }
@@ -66,15 +59,14 @@ float MA732_get_degree(MA732_t *encd) {
 
     encd->prev_raw_angle = angle_raw;
 
-    // Filter IIR dengan wrap-around
     float filtered_diff = angle_raw - encd->angle_filtered;
-    filtered_diff -= 360.0f * floorf((filtered_diff + 180.0f) / 360.0f);
+    filtered_diff -= TWO_PI_F * floorf((filtered_diff + PI_F) / TWO_PI_F);
     encd->angle_filtered += ANGLE_FILTER_ALPHA * filtered_diff;
 
-    if (encd->angle_filtered >= 360.0f)
-        encd->angle_filtered -= 360.0f;
+    if (encd->angle_filtered >= TWO_PI_F)
+        encd->angle_filtered -= TWO_PI_F;
     else if (encd->angle_filtered < 0.0f)
-        encd->angle_filtered += 360.0f;
+        encd->angle_filtered += TWO_PI_F;
 
     return encd->angle_filtered;
 }

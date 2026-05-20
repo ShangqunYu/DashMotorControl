@@ -46,7 +46,7 @@ void angle_sensor_update(AngleSensor_t *sensor)
 {
     if (sensor == NULL) return;
 
-    float raw_rad = DEG_TO_RAD(MA732_get_degree(&sensor->ma732));
+    float raw_rad = MA732_get_rad(&sensor->ma732);
 
     // Angle referenced to electrical zero — used for LUT lookup and e_angle
     float angle_from_ezero = raw_rad - sensor->e_zero;

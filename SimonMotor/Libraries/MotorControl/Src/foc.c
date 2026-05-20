@@ -10,6 +10,7 @@
 #include "main.h"
 #include "hw_config.h"
 #include "tim.h"
+#include <math.h>
 
 void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv) {
 	if (hfoc == NULL || pole_pairs == 0 || kv <= 0) {
@@ -47,6 +48,23 @@ void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w) {
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, (uint32_t)(dtc_u * res));
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, (uint32_t)(dtc_v * res));
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, (uint32_t)(dtc_w * res));
+}
+
+void abc(float theta, float d, float q, float *a, float *b, float *c) {
+    float cf = fast_cos(theta);
+    float sf = fast_sin(theta);
+    *a =  cf * d - sf * q;
+    *b =  (SQRT3_BY_TWO * sf - 0.5f * cf) * d - (-SQRT3_BY_TWO * cf - 0.5f * sf) * q;
+    *c = (-SQRT3_BY_TWO * sf - 0.5f * cf) * d - ( SQRT3_BY_TWO * cf - 0.5f * sf) * q;
+}
+
+void svm(float v_max, float u, float v, float w,
+         float *dtc_u, float *dtc_v, float *dtc_w) {
+    float v_offset = (fminf(fminf(u, v), w) + fmaxf(fmaxf(u, v), w)) * 0.5f;
+    float v_mid    = 0.5f * (DTC_MAX + DTC_MIN);
+    *dtc_u = CONSTRAIN(0.5f * (u - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    *dtc_v = CONSTRAIN(0.5f * (v - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    *dtc_w = CONSTRAIN(0.5f * (w - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
 }
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit) {
