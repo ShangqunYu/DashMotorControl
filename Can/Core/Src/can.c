@@ -54,14 +54,17 @@ void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
+  uint16_t filter_id = 0x1;
+  // uint32_t filter_mask = 0b11111111111111111111111111111;
+  uint32_t filter_mask = 0b00000000000000000000011111111;
   CAN_FilterTypeDef canfilterconfig;
   canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
   canfilterconfig.FilterBank = 10;
   canfilterconfig.FilterFIFOAssignment = CAN_RX_FIFO0;
-  canfilterconfig.FilterIdHigh = 0;
-  canfilterconfig.FilterIdLow  = 0x0000;
-  canfilterconfig.FilterMaskIdHigh = 0;
-  canfilterconfig.FilterMaskIdLow = 0x0000;
+  canfilterconfig.FilterIdHigh = filter_id >> 13 & 0xFFFF;
+  canfilterconfig.FilterIdLow  = filter_id << 3 & 0xFFF8;
+  canfilterconfig.FilterMaskIdHigh = filter_mask >> 13 & 0xFFFF;
+  canfilterconfig.FilterMaskIdLow = filter_mask << 3 & 0xFFF8;
   canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
   canfilterconfig.FilterScale=CAN_FILTERSCALE_32BIT;
   canfilterconfig.SlaveStartFilterBank = 0;

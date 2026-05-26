@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #define N_POS_SAMPLES 20		// Number of position samples to store.  should put this somewhere else...
+#define N_VEL_SAMPLES 1		// Number of velocity samples in moving average
 #define N_LUT 128
 
 typedef struct{
@@ -23,13 +24,14 @@ typedef struct{
 		uint8_t spi_rx_buff[2];
 		uint16_t spi_rx_word;
 	};
-	float angle_singleturn, old_angle, angle_multiturn[N_POS_SAMPLES], elec_angle, velocity, elec_velocity, ppairs, vel2;
+	float angle_singleturn, old_angle, angle_multiturn[N_POS_SAMPLES], elec_angle, velocity, elec_velocity, ppairs, filtered_vel;
+	float vel_vec[N_VEL_SAMPLES], vel_sum;
 	float output_angle_multiturn;
 	int raw, count, old_count, turns;
 	int count_buff[N_POS_SAMPLES];
 	int m_zero, e_zero;
 	int offset_lut[N_LUT];
-	uint8_t first_sample;
+	uint8_t first_sample, vel_index, vel_count;
 } EncoderStruct;
 
 void ps_warmup(EncoderStruct * encoder, int n);

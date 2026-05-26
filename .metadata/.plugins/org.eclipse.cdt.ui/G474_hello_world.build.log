@@ -1,10 +1,10 @@
-16:34:04 **** Incremental Build of configuration Debug for project G474_hello_world ****
+16:07:12 **** Incremental Build of configuration Debug for project G474_hello_world ****
 make -j16 all 
 arm-none-eabi-size  G474_hello_world.elf 
    text	   data	    bss	    dec	    hex	filename
-  41328	    136	   3400	  44864	   af40	G474_hello_world.elf
+  43644	    136	   3496	  47276	   b8ac	G474_hello_world.elf
 Finished building: default.size.stdout
  
 
-16:34:04 Build Finished. 0 errors, 0 warnings. (took 409ms)
+16:07:12 Build Finished. 0 errors, 0 warnings. (took 181ms)
 

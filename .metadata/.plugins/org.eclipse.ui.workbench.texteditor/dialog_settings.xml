@@ -3,20 +3,20 @@
 	<item key="hasShownOverlayPopupBefore" value="true"/>
 	<item key="replaceBarOpen" value="false"/>
 	<list key="searchhistory">
-		<item value="send_float"/>
-		<item value="printf"/>
-		<item value="MX_ADC1_Init"/>
-		<item value="adc"/>
-		<item value="user code begin 4"/>
-		<item value="hal_adce"/>
-		<item value="update_fsm"/>
-		<item value="enter_setup_state"/>
-		<item value="enter_menu_state"/>
-		<item value="fsm_enter_state"/>
-		<item value="comm_encoder"/>
-		<item value="dt"/>
-		<item value="sine_table"/>
-		<item value="FLASH_BANK1_START"/>
-		<item value="FLASH_PageErase"/>
+		<item value="CAL_CMD"/>
+		<item value="offset_lut"/>
+		<item value="velocity"/>
+		<item value="CAN_TIMEOUT"/>
+		<item value="i_q_des"/>
+		<item value="dtheta_mech"/>
+		<item value="controller"/>
+		<item value="commutate"/>
+		<item value="CALIBRATION_MODE"/>
+		<item value="cos_lut"/>
+		<item value="PHASE_ORDER"/>
+		<item value="I_CAL"/>
+		<item value="set_dtc"/>
+		<item value="enable"/>
+		<item value="period"/>
 	</list>
 </section>

@@ -42,6 +42,7 @@ typedef struct {
     float prev_angle_filtered;
     float prev_raw_angle;
     uint8_t spike_counter;
+    uint8_t first_read;
     
     float prev_angle;
     float filtered_rpm;

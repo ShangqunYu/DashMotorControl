@@ -115,6 +115,7 @@ int main(void)
   /* Sanitize configs in case flash is empty*/
   if(E_ZERO==-1){E_ZERO = 0;}
   if(M_ZERO==-1){M_ZERO = 0;}
+  M_ZERO = 0;
   if(isnan(I_BW) || I_BW==-1){I_BW = 1000;}
   if(isnan(I_MAX) || I_MAX ==-1){I_MAX=40;}
   if(isnan(I_FW_MAX) || I_FW_MAX ==-1){I_FW_MAX=0;}
@@ -238,11 +239,21 @@ int main(void)
   uint16_t angle_reading;
   while (1)
   {
-	  HAL_Delay(1000);
-	  drv_print_faults(drv);
+	  HAL_Delay(10);
+	  // drv_print_faults(drv);
 	  // angle_reading = (uint16_t)comm_encoder.angle_singleturn;
 	  // printf("angle: %d\r\n", angle_reading);
 	  // printf("%.3f\n\r", controller.dtheta_mech);
+    printf("iq: %.3f\r\n", controller.i_q);
+    printf("i_q_des: %.3f\r\n", controller.i_q_des);
+    printf("i_q_filt: %.3f\r\n", controller.i_q_filt);
+    printf("id: %.3f\r\n", controller.i_d);
+    printf("id_des: %.3f\r\n", controller.i_d_des);
+    printf("id_filt: %.3f\r\n", controller.i_d_filt);
+    printf("i_a: %.3f\r\n", controller.i_a);
+    printf("i_b: %.3f\r\n", controller.i_b);
+    printf("i_c: %.3f\r\n", controller.i_c);
+
 
     /* USER CODE END WHILE */
 

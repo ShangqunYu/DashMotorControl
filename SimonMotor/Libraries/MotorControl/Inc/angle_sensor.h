@@ -31,21 +31,20 @@ typedef enum {
 typedef struct {
     MA732_t ma732;
 
-    float m_angle_rad;       // user position (LUT-corrected, relative to m_zero)
-    float m_angle_rad_raw;   // user position before LUT correction (same reference, for comparison)
-    float e_angle_rad;       // un-normalised electric angle
-    float e_angle_rad_comp;  // normalised electric angle (used by current control)
+    float s_angle_rad;       // user position single turn (LUT-corrected, relative to m_zero)
+    float s_angle_rad_raw;   // user position before LUT correction (same reference, for comparison)
+    float multi_angle_rad;   // multiturn mechanical angle (LUT-corrected, relative to m_zero)
     float e_zero;            // electrical zero (rad): encoder reading when e=0, from calibration
     float m_zero;            // mechanical zero (rad): user-defined position reference
     float e_rad;             // electric angle latched each FOC cycle
-    float last_e_rad;
 
     float actual_vel;        // mechanical velocity (rad/s, direction-corrected)
-    float prev_m_angle_rad;  // previous m_angle_rad for delta computation
+    float prev_multi_angle_rad;  // previous multi_angle_rad for velocity delta
     float prev_vel;          // previous instantaneous velocity (spike rejection)
     float filtered_vel;      // IIR filter state
+    int turns;               // cumulative turn count for multi-turn support 
 
-    uint8_t pole_pairs;
+    uint8_t pole_pairs, first_sample;
     dir_mode_t sensor_dir;
 
     /* Encoder nonlinearity correction LUT (populated by angle_sensor_load_lut) */
@@ -71,12 +70,12 @@ void angle_sensor_load_lut(AngleSensor_t *sensor,
 // Call from the SPI-complete ISR (HAL_SPI_TxRxCpltCallback).
 void angle_sensor_update(AngleSensor_t *sensor);
 
-// Compute mechanical velocity in rad/s from the delta of m_angle_rad.
+// Compute mechanical velocity in rad/s from the delta of s_angle_rad.
 // Call once per FOC cycle (Ts = FOC sample period in seconds).
 void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts);
 
 // Capture the current position as the mechanical zero.
-// After this call m_angle_rad == 0; save m_zero to flash from the main loop.
+// After this call s_angle_rad == 0; save m_zero to flash from the main loop.
 void angle_sensor_set_m_zero(AngleSensor_t *sensor);
 
 #endif /* ANGLE_SENSOR_INC_ANGLE_SENSOR_H_ */

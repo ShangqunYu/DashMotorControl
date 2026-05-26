@@ -48,7 +48,10 @@ float MA732_get_rad(MA732_t *encd) {
     float angle_diff = angle_raw - encd->prev_raw_angle;
     angle_diff -= TWO_PI_F * floorf((angle_diff + PI_F) / TWO_PI_F);
 
-    if (fabsf(angle_diff) > MAX_ANGLE_JUMP_RAD) {
+    if (!encd->first_read) {
+        encd->first_read = 1;
+        encd->angle_filtered = angle_raw;
+    } else if (fabsf(angle_diff) > MAX_ANGLE_JUMP_RAD) {
         if (++encd->spike_counter < SPIKE_REJECT_COUNT) {
             return encd->angle_filtered;
         }

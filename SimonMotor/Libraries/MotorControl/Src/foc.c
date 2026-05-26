@@ -87,23 +87,17 @@ void foc_speed_control_update(foc_t *hfoc, float vel_reference) {
 void foc_mit_control_update(foc_t *hfoc){
     if (hfoc == NULL) return;
     hfoc->id_ref = 0.0f;
-    float pos_error = hfoc->mit_cmd.des_pos - hfoc->angle_sensor.m_angle_rad;
-    // Wrap to [-π, π] so the controller always takes the shortest path
-    while (pos_error >  PI) pos_error -= TWO_PI;
-    while (pos_error < -PI) pos_error += TWO_PI;
+    float pos_error = hfoc->mit_cmd.des_pos - hfoc->angle_sensor.multi_angle_rad;
     float vel_error = hfoc->mit_cmd.des_vel - hfoc->angle_sensor.actual_vel;
     hfoc->iq_ref = hfoc->mit_cmd.kp * pos_error + hfoc->mit_cmd.kd * vel_error;
     // Cap iq_ref for safety
     hfoc->iq_ref = CONSTRAIN(hfoc->iq_ref, -10.0f, 10.0f);
 }
 
-void foc_update_position_velocity(foc_t *hfoc, float Ts) {
+void foc_update_velocity(foc_t *hfoc, float Ts) {
     if (hfoc == NULL || Ts <= 0.0f) {
         return;
     }
-
-    // Latch the latest normalised electric angle for the current controller
-    hfoc->angle_sensor.e_rad = hfoc->angle_sensor.e_angle_rad_comp;
 
     // Compute mechanical velocity in rad/s from LUT-corrected angle delta
     angle_sensor_update_velocity(&hfoc->angle_sensor, Ts);

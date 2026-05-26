@@ -64,17 +64,17 @@ uint8_t RxData[8];
 
 uint8_t count = 0;
 
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
-{
-  if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if ((RxHeader.StdId == 0x103))
-  {
-	  printf("Received: %d, %d\n", RxData[0], RxData[1]);
-  }
-}
+// void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+// {
+//   if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
+//   {
+//     Error_Handler();
+//   }
+//   if ((RxHeader.StdId == 0x103))
+//   {
+// 	  printf("Received: %d, %d\n", RxData[0], RxData[1]);
+//   }
+// }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if (GPIO_Pin == GPIO_PIN_2){
@@ -119,15 +119,16 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_CAN_Start(&hcan1);
 
-  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-  {
-	  Error_Handler();
-  }
+  // if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+  // {
+	//   Error_Handler();
+  // }
   TxHeader.DLC = 8;
 //  TxHeader.ExtId = 0;
-  TxHeader.IDE = CAN_ID_STD;
+  TxHeader.IDE = CAN_ID_EXT;
   TxHeader.RTR = CAN_RTR_DATA;
   TxHeader.StdId = 0x103;
+  TxHeader.ExtId = 0x1FFFFFFF;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -140,6 +141,7 @@ int main(void)
     TxData[0] = 100;
 		TxData[1] = 10;
 		HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+    printf("Hello World %d\n\r", count++);
     HAL_Delay(1000);
   }
   /* USER CODE END 3 */

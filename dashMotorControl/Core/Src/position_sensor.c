@@ -26,6 +26,9 @@ void ps_warmup(EncoderStruct * encoder, int n){
 void ps_sample(EncoderStruct * encoder, float dt){
 	/* updates EncoderStruct encoder with the latest sample
 	 * after elapsed time dt */
+	if(dt <= 0.0f){
+		return;
+	}
 
 	/* Shift around previous samples */
 	encoder->old_angle = encoder->angle_singleturn;
@@ -38,7 +41,7 @@ void ps_sample(EncoderStruct * encoder, float dt){
 	while( ENC_SPI.State == HAL_SPI_STATE_BUSY );  					// wait for transmission complete
 	HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET ); 	// CS high
 	encoder->raw = encoder ->spi_rx_word;
-	// encoder->raw = encoder->spi_rx_word & 0xFFF0;
+	encoder->raw = encoder->spi_rx_word & 0xFFF0;
 
 	/* Linearization */
 	int off_1 = encoder->offset_lut[(encoder->raw)>>9];				// lookup table lower entry
@@ -49,35 +52,55 @@ void ps_sample(EncoderStruct * encoder, float dt){
 
 	/* Real angles in radians */
 	encoder->angle_singleturn = ((float)(encoder->count-M_ZERO))/((float)ENC_CPR);
-	int int_angle = encoder->angle_singleturn;
-	encoder->angle_singleturn = TWO_PI_F*(encoder->angle_singleturn - (float)int_angle);
-	encoder->angle_singleturn = encoder->angle_singleturn<0 ? encoder->angle_singleturn + TWO_PI_F : encoder->angle_singleturn;
+	// int int_angle = encoder->angle_singleturn;
+	// encoder->angle_singleturn = TWO_PI_F*(encoder->angle_singleturn - (float)int_angle);
+	encoder->angle_singleturn = TWO_PI_F*encoder->angle_singleturn;
+	// encoder->angle_singleturn = encoder->angle_singleturn<0 ? encoder->angle_singleturn + TWO_PI_F : encoder->angle_singleturn;
 
 	encoder->elec_angle = (encoder->ppairs*(float)(encoder->count-E_ZERO))/((float)ENC_CPR);
-	int_angle = (int)encoder->elec_angle;
+	int int_angle = (int)encoder->elec_angle;
 	encoder->elec_angle = TWO_PI_F*(encoder->elec_angle - (float)int_angle);
 	encoder->elec_angle = encoder->elec_angle<0 ? encoder->elec_angle + TWO_PI_F : encoder->elec_angle;	// Add 2*pi to negative numbers
 	/* Rollover */
 	int rollover = 0;
 	float angle_diff = encoder->angle_singleturn - encoder->old_angle;
-	if(angle_diff > PI_F){rollover = -1;}
-	else if(angle_diff < -PI_F){rollover = 1;}
+	if(angle_diff > PI_F)
+		{rollover = -1;}
+	else if(angle_diff < -PI_F)
+		{rollover = 1;}
 	encoder->turns += rollover;
 	if(!encoder->first_sample){
 		encoder->turns = 0;
-		if(encoder->angle_singleturn > PI_OVER_2_F){encoder->turns = -1;}
-		else if(encoder->angle_singleturn < -PI_OVER_2_F){encoder->turns = 1;}
+		// if(encoder->angle_singleturn > PI_OVER_2_F){encoder->turns = -1;}
+		// else if(encoder->angle_singleturn < -PI_OVER_2_F){encoder->turns = 1;}
+		float first_multiturn = encoder->angle_singleturn + TWO_PI_F*(float)encoder->turns;
+		for(int i = 0; i < N_POS_SAMPLES; i++){encoder->angle_multiturn[i] = first_multiturn;}
 		encoder->first_sample = 1;
 	}
 
 	/* Multi-turn position */
 	encoder->angle_multiturn[0] = encoder->angle_singleturn + TWO_PI_F*(float)encoder->turns;
 
-	/* Velocity */
-	encoder->velocity = (encoder->angle_multiturn[0] - encoder->angle_multiturn[N_POS_SAMPLES-1])/(dt*(float)(N_POS_SAMPLES-1));
-	if (encoder->velocity > 2.0f) {
-		printf("High velocity detected: %f\r\n", encoder->velocity);
+	/* Velocity: average of the most recent N_VEL_SAMPLES raw derivatives */
+	float raw_velocity = (encoder->angle_multiturn[0] - encoder->angle_multiturn[1])/dt;
+	if(encoder->vel_count < N_VEL_SAMPLES){
+		encoder->vel_vec[encoder->vel_index] = raw_velocity;
+		encoder->vel_sum += raw_velocity;
+		encoder->vel_index = (encoder->vel_index + 1) % N_VEL_SAMPLES;
+		encoder->vel_count++;
+		encoder->velocity = encoder->vel_sum/(float)encoder->vel_count;
+	}else{
+		encoder->vel_sum -= encoder->vel_vec[encoder->vel_index];
+		encoder->vel_vec[encoder->vel_index] = raw_velocity;
+		encoder->vel_sum += raw_velocity;
+		encoder->vel_index = (encoder->vel_index + 1) % N_VEL_SAMPLES;
+		encoder->velocity = encoder->vel_sum/(float)N_VEL_SAMPLES;
 	}
+	// if (raw_velocity> 10.0f) {
+	// 	int c = 0;
+	// }
+	// encoder->velocity = raw_velocity;
+	encoder->filtered_vel = encoder->velocity;
 	encoder->elec_velocity = encoder->ppairs*encoder->velocity;
 
 }

@@ -109,7 +109,7 @@ static void foc_loop(void) {
   CurrentSensor_sample_offset(&hfoc.current_sensor);
 
   // Update position and velocity (called every FOC cycle)
-  foc_update_position_velocity(&hfoc, FOC_TS);
+  foc_update_velocity(&hfoc, FOC_TS);
   // // pa4 set high
   // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
   // // pa4 set low
@@ -344,8 +344,6 @@ int main(void)
   }
   /* USER CODE END 2 */
 
-
-
   /* Init scheduler */
   osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
   MX_FREERTOS_Init();
@@ -354,7 +352,16 @@ int main(void)
   osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
-  Error_Handler();
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
 }
 
 /**
