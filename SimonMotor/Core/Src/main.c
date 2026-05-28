@@ -315,7 +315,7 @@ int main(void)
 
   	// current sensor
   hfoc.control_mode = POWER_UP_MODE;
-  CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), I_SCALE, 2048, 2048);
+  CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
 	// voltage sensor
@@ -327,8 +327,8 @@ int main(void)
   htim1.Instance->CCR2 = 0u;
   htim1.Instance->CCR3 = 0u;
   CurrentSensor_calibrate(&hfoc.current_sensor, 1000U);
-  printf("ADC offsets: A=%d, B=%d\r\n",
-         hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset);
+  printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
+         hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset, hfoc.current_sensor.adc_c_offset);
 
   if (CALIBRATION_DONE_FLAG == 1) {
     hfoc.angle_sensor.e_zero     = E_ZERO_RAD;

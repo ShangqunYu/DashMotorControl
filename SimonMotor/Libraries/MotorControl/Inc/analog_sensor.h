@@ -12,9 +12,11 @@
 typedef struct {
     volatile uint32_t *adc_ia;
     volatile uint32_t *adc_ib;
+    volatile uint32_t *adc_ic;
     float current_scale;
     int adc_a_offset;
     int adc_b_offset;
+    int adc_c_offset;
     float ia;
     float ib;
     float ic;
@@ -24,15 +26,18 @@ typedef struct {
     volatile uint8_t offset_calibrating;
     volatile uint32_t adc_a_offset_sum;
     volatile uint32_t adc_b_offset_sum;
+    volatile uint32_t adc_c_offset_sum;
     volatile uint32_t adc_offset_sample_count;
 } CurrentSensor;
 
 void CurrentSensor_init(CurrentSensor *sensor,
                         volatile uint32_t *adc_ia,
                         volatile uint32_t *adc_ib,
+                        volatile uint32_t *adc_ic,
                         float current_scale,
                         int adc_a_offset,
-                        int adc_b_offset);
+                        int adc_b_offset,
+                        int adc_c_offset);
 void CurrentSensor_update(CurrentSensor *sensor);
 void CurrentSensor_begin_offset_calibration(CurrentSensor *sensor);
 void CurrentSensor_sample_offset(CurrentSensor *sensor);

@@ -57,6 +57,16 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define PhaseC_Pin GPIO_PIN_0
+#define PhaseC_GPIO_Port GPIOC
+#define PhaseB_Pin GPIO_PIN_1
+#define PhaseB_GPIO_Port GPIOC
+#define PhaseA_Pin GPIO_PIN_2
+#define PhaseA_GPIO_Port GPIOC
+#define MotorTemp_Pin GPIO_PIN_0
+#define MotorTemp_GPIO_Port GPIOA
+#define BusV_Pin GPIO_PIN_1
+#define BusV_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 
