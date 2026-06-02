@@ -23,13 +23,14 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
-/* USER CODE END Includes */
 #include "can.h"
 #include "hw_config.h"
 #include "user_config.h"
 #include "foc.h"
 #include "fsm.h"
 #include "math_ops.h"
+/* USER CODE END Includes */
+
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
 
@@ -75,7 +76,6 @@ extern TIM_HandleTypeDef htim6;
 /* USER CODE BEGIN EV */
 extern foc_t              hfoc;
 extern FSMStruct          hfsm;
-extern volatile can_cmd_t g_can_cmd;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -234,19 +234,19 @@ void CAN1_RX0_IRQHandler(void)
   HAL_CAN_GetRxMessage(&CAN_H, CAN_RX_FIFO0, &can_rx.rx_header, can_rx.data);
 
   /* Send reply: can_id, position (rad), velocity (rad/s), estimated torque (N-m), vbus (V), motor temp (C) */
-  pack_reply(&can_tx, CAN_ID, hfoc.angle_sensor.multi_angle_rad/GR, hfoc.angle_sensor.actual_vel/GR, hfoc.iq*KT*GR, hfoc.v_bus, hfoc.motor_temp);
+  pack_reply(&can_tx, CAN_ID, hfoc.angle_sensor.multi_rotor_rad/GR, hfoc.angle_sensor.rotor_vel/GR, hfoc.iq*KT*GR, hfoc.v_bus, hfoc.motor_temp);
   uint32_t tx_mailbox;
   HAL_CAN_AddTxMessage(&CAN_H, &can_tx.tx_header, can_tx.data, &tx_mailbox);
 
 
   /* Special commands: first 7 bytes all 0xFF, last byte selects command */
-  if (can_rx.rx_header.DLC == 8 &&
-      can_rx.data[0] == 0xFF && can_rx.data[1] == 0xFF && can_rx.data[2] == 0xFF && can_rx.data[3] == 0xFF &&
+  if (can_rx.data[0] == 0xFF && can_rx.data[1] == 0xFF && can_rx.data[2] == 0xFF && can_rx.data[3] == 0xFF &&
       can_rx.data[4] == 0xFF && can_rx.data[5] == 0xFF && can_rx.data[6] == 0xFF) {
     switch (can_rx.data[7]) {
       case MIT_MODE: update_fsm(&hfsm, MOTOR_CMD); break;  /* enter torque control */
       case MENU_MODE: update_fsm(&hfsm, MENU_CMD);  break;  /* return to menu / disable */
       case SET_ZERO_MODE: update_fsm(&hfsm, ZERO_CMD);  break;  /* set mechanical zero */
+      case CALIBRATION_MODE: update_fsm(&hfsm, CAL_CMD); break;  /* enter calibration mode */
       default:   break;
     }
     return;
@@ -254,13 +254,8 @@ void CAN1_RX0_IRQHandler(void)
 
   /* Regular MIT position/velocity/gain command */
   if (can_rx.rx_header.DLC == 8) {
-    float commands[5];
-    unpack_cmd(can_rx, commands);
-    g_can_cmd.des_pos     = commands[0];
-    g_can_cmd.des_vel     = commands[1];
-    g_can_cmd.kp          = commands[2];
-    g_can_cmd.kd          = commands[3];
-    g_can_cmd.mit_pending = 1;
+    unpack_cmd(can_rx, (float *)hfoc.mit_buf.commands);
+    hfoc.mit_pending = 1;
   }
 
   /* USER CODE END CAN1_RX0_IRQn 1 */

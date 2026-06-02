@@ -25,7 +25,6 @@
 /* ── Globals owned by main.c ─────────────────────────────────────────────── */
 extern foc_t            hfoc;
 extern CalStruct        hcal;
-extern volatile can_cmd_t g_can_cmd;
 extern PreferenceWriter prefs;
 extern DRVStruct        drv;
 
@@ -39,12 +38,9 @@ void run_fsm(FSMStruct *fsmstate)
     foc_update_velocity(&hfoc, FOC_TS);
 
     /* 2. Apply pending MIT parameters (not a mode change) ----------------- */
-    if (g_can_cmd.mit_pending) {
-        hfoc.mit_cmd.des_pos  = g_can_cmd.des_pos;
-        hfoc.mit_cmd.des_vel  = g_can_cmd.des_vel;
-        hfoc.mit_cmd.kp       = g_can_cmd.kp;
-        hfoc.mit_cmd.kd       = g_can_cmd.kd;
-        g_can_cmd.mit_pending = 0;
+    if (hfoc.mit_pending) {
+        hfoc.mit_cmd    = hfoc.mit_buf;
+        hfoc.mit_pending = 0;
     }
 
     /* 3. FSM transition management ---------------------------------------- */

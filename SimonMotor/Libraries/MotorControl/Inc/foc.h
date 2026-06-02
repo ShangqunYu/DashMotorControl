@@ -44,11 +44,12 @@ typedef enum {
 }p_det_state_t;
 
 typedef struct {
-	float des_pos;
-	float des_vel;
-	float f_tau;
-	float kp;
-	float kd;
+    union{
+    	float commands[5];									// Making this easier to pass around without including foc.h everywhere
+    	struct{
+    		float p_des, v_des, kp, kd, t_ff;                   // Desired position, velocity, gains, torque
+    	};
+    };	
 } MIT_CMD;
 
 typedef struct {
@@ -84,9 +85,6 @@ typedef struct {
 
 	float gear_ratio;
 
-	SecondOrderLPF id_lpf;
-	SecondOrderLPF iq_lpf;
-
 	//polarity detection
 	p_det_state_t pd_state;
 	float pd_v_pulse;
@@ -102,11 +100,12 @@ typedef struct {
 	int sample_index;
 	_Bool collect_sample_flag;
 
-	MIT_CMD mit_cmd;
+	MIT_CMD          mit_cmd;
+	volatile MIT_CMD mit_buf;
+	volatile uint8_t mit_pending;
 } foc_t;
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
-void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv);
 void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);

@@ -74,7 +74,6 @@ CANRxMessage can_rx;
 bool pose_ready = false;
 float rpm = 0.0f;
 
-volatile can_cmd_t g_can_cmd = {0};
 FSMStruct hfsm;
 /* USER CODE END PV */
 
@@ -155,13 +154,10 @@ int main(void)
   can_rx_init(&can_rx);
   can_tx_init(&can_tx);
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
-  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-  {
-    Error_Handler();
-  }
+  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
 
-    /* DRV8323 setup */
+  /* DRV8353 setup */
   drv_init(drv, I_MAX);
 
   MA732_config(&hfoc.angle_sensor.ma732, &ENC_SPI);
@@ -169,7 +165,6 @@ int main(void)
     MA732_start(&hfoc.angle_sensor.ma732);
     HAL_Delay(10);
   }
-    // MA732_start(&hfoc.angle_sensor.ma732);
 
     /* Turn on PWM */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -181,7 +176,6 @@ int main(void)
   uint32_t offset = (uint32_t)(2.5f * 180);
   htim1.Instance->CCR4 = htim1.Instance->ARR - 240;
 
-  foc_motor_init(&hfoc, POLE_PAIR, 360.0f);
   foc_sensor_init(&hfoc, 0.0f, NORMAL_DIR);
   foc_timer_init(&hfoc, &htim1);
   foc_set_limit_current(&hfoc, 20.0f);
@@ -221,7 +215,6 @@ int main(void)
   CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
-	// voltage sensor
 	HAL_ADCEx_InjectedStart_IT(&hadc3);
   HAL_Delay(50);
 
@@ -237,7 +230,7 @@ int main(void)
     hfoc.angle_sensor.e_zero     = E_ZERO_RAD;
     hfoc.angle_sensor.m_zero     = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
     hfoc.angle_sensor.sensor_dir = (PHASE_ORDER == 1) ? REVERSE_DIR : NORMAL_DIR;
-    hfoc.angle_sensor.pole_pairs = ((uint8_t)PPAIRS > 0) ? (uint8_t)PPAIRS : POLE_PAIR;
+    hfoc.angle_sensor.pole_pairs = (uint8_t)PPAIRS;
     memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
            sizeof(hfoc.angle_sensor.encd_error_comp));
     hfoc.angle_sensor.lut_ready = 1;

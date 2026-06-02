@@ -71,7 +71,6 @@
 #define FILTER_MASK 0b00000000000000000000011111111
 
 
-#define POLE_PAIR 7
 #define KV 330.0f
 
 #define W_CAL               10.0f   // LUT sweep speed (electrical rad/s)

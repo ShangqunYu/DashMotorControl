@@ -158,8 +158,8 @@ void startMotorMgrTask(void *argument)
     }
 
     if (hfoc.control_mode == ENCODER_MODE) {
-      printf("m_angle_raw:  %.4f rad\r\n", hfoc.angle_sensor.s_angle_rad_raw);
-      printf("m_angle_comp: %.4f rad\r\n", hfoc.angle_sensor.s_angle_rad);
+      printf("m_angle_raw:  %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad_raw);
+      printf("m_angle_comp: %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad);
     }
 
     // printf("id: %.3f\r\n",       hfoc.id);
@@ -171,9 +171,9 @@ void startMotorMgrTask(void *argument)
     // printf("i_a: %.3f\r\n",      hfoc.current_sensor.ia_filtered);
     // printf("i_b: %.3f\r\n",      hfoc.current_sensor.ib_filtered);
     // printf("i_c: %.3f\r\n",      hfoc.current_sensor.ic_filtered);
-    // printf("m_angle: %.4f\r\n",  hfoc.angle_sensor.s_angle_rad);
+    // printf("m_angle: %.4f\r\n",  hfoc.angle_sensor.s_rotor_rad);
     // printf("e_angle: %.4f\r\n",  hfoc.angle_sensor.e_rad);
-    // printf("rpm: %.3f\r\n",      hfoc.angle_sensor.actual_vel);
+    // printf("rpm: %.3f\r\n",      hfoc.angle_sensor.rotor_vel);
     // printf("rpm_ref: %.3f\r\n",  hfoc.vel_ref);
   }
   /* USER CODE END startMotorMgrTask */

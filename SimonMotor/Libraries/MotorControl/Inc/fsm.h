@@ -26,18 +26,9 @@ extern "C" {
 #define ENTER_CMD   13    /* carriage return – confirm setup entry */
 
 /* ── CAN MIT command buffer ───────────────────────────────────────────────
- * Written by the CAN ISR, consumed by run_fsm every FOC cycle.
- * Mode transitions go through FSMStruct.next_state directly (not here).
+ * Written by the CAN ISR into hfoc.mit_buf; consumed by run_fsm via
+ * hfoc.mit_pending every FOC cycle.
  */
-typedef struct {
-    float   des_pos;
-    float   des_vel;
-    float   kp;
-    float   kd;
-    uint8_t mit_pending;   /* 1 = new MIT params waiting */
-} can_cmd_t;
-
-extern volatile can_cmd_t g_can_cmd;
 
 /* ── FSM state struct ─────────────────────────────────────────────────────
  * state      : currently executing state

@@ -12,15 +12,6 @@
 #include "tim.h"
 #include <math.h>
 
-void foc_motor_init(foc_t *hfoc, uint8_t pole_pairs, float kv) {
-	if (hfoc == NULL || pole_pairs == 0 || kv <= 0) {
-		return;
-	}
-
-	hfoc->angle_sensor.pole_pairs = pole_pairs;
-	hfoc->kv = kv;
-}
-
 void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir) {
 	if (hfoc == NULL) return;
 
@@ -81,14 +72,14 @@ void foc_speed_control_update(foc_t *hfoc, float vel_reference) {
 	}
 
     hfoc->id_ref = 0.0f;
-    hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, vel_reference - hfoc->angle_sensor.actual_vel);
+    hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, vel_reference - hfoc->angle_sensor.rotor_vel);
 }
 
 void foc_mit_control_update(foc_t *hfoc){
     if (hfoc == NULL) return;
     hfoc->id_ref = 0.0f;
-    float pos_error = hfoc->mit_cmd.des_pos - hfoc->angle_sensor.multi_angle_rad;
-    float vel_error = hfoc->mit_cmd.des_vel - hfoc->angle_sensor.actual_vel;
+    float pos_error = hfoc->mit_cmd.p_des - hfoc->angle_sensor.multi_rotor_rad;
+    float vel_error = hfoc->mit_cmd.v_des - hfoc->angle_sensor.rotor_vel;
     hfoc->iq_ref = hfoc->mit_cmd.kp * pos_error + hfoc->mit_cmd.kd * vel_error;
     // Cap iq_ref for safety
     hfoc->iq_ref = CONSTRAIN(hfoc->iq_ref, -10.0f, 10.0f);
