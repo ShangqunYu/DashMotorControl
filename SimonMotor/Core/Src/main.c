@@ -42,26 +42,11 @@
 #include "angle_sensor.h"
 #include "foc_calibration.h"
 #include "pid_utils.h"
-#define BLDC_PWM_FREQ 40000
-#define FOC_TS (1.0f / (float)BLDC_PWM_FREQ)
-#define SPEED_CONTROL_CYCLE	10
-#define SPEED_TS (FOC_TS * SPEED_CONTROL_CYCLE) 
+#include "fsm.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
-// CAN command buffer – written by CAN ISR, consumed by foc_loop
-typedef struct {
-    motor_mode_t mode;
-    float        des_pos;
-    float        des_vel;
-    float        kp;
-    float        kd;
-    uint8_t      mode_pending;   // 1 = new mode waiting
-    uint8_t      mit_pending;    // 1 = new MIT params waiting
-} can_cmd_t;
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -83,12 +68,14 @@ PreferenceWriter prefs;
 DRVStruct drv;
 foc_t hfoc;
 CalStruct hcal;
-
+CANTxMessage can_tx;
+CANRxMessage can_rx;
 
 bool pose_ready = false;
 float rpm = 0.0f;
 
 volatile can_cmd_t g_can_cmd = {0};
+FSMStruct hfsm;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -100,95 +87,6 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-
-
-static void foc_loop(void) {
-
-  hfoc.v_bus = get_power_voltage();
-  CurrentSensor_sample_offset(&hfoc.current_sensor);
-
-  // Update position and velocity (called every FOC cycle)
-  foc_update_velocity(&hfoc, FOC_TS);
-  // // pa4 set high
-  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-  // // pa4 set low
-  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-
-
-  // Apply any pending CAN command before running the control loop
-  if (g_can_cmd.mode_pending) {
-    motor_mode_t new_mode = g_can_cmd.mode;
-    g_can_cmd.mode_pending = 0;
-    hfoc.control_mode = new_mode;
-    if (new_mode == CALIBRATION_MODE) {
-      foc_cal_encoder_misalignment_start(&hfoc, &hcal);
-    }
-  }
-  if (g_can_cmd.mit_pending) {
-    hfoc.mit_cmd.des_pos = g_can_cmd.des_pos;
-    hfoc.mit_cmd.des_vel = g_can_cmd.des_vel;
-    hfoc.mit_cmd.kp      = g_can_cmd.kp;
-    hfoc.mit_cmd.kd      = g_can_cmd.kd;
-    g_can_cmd.mit_pending = 0;
-  }
-
-  switch(hfoc.control_mode) {
-    case TORQUE_CONTROL_MODE:
-      hfoc.id_ref = 0.0f;
-      hfoc.iq_ref = 1.0f; // Set a constant torque reference for testing
-      foc_current_control_update(&hfoc, FOC_TS);
-      break;
-    case SPEED_CONTROL_MODE:
-      hfoc.vel_ref = TWO_PI;  // 1 rev/s = 2π rad/s (~60 RPM)
-      foc_speed_control_update(&hfoc, hfoc.vel_ref);
-      foc_current_control_update(&hfoc, FOC_TS);
-      break;
-    case MIT_MODE: {
-      static uint32_t mit_tick = 0;
-      static uint32_t period_start_ms = 0;
-      const float freq = 1.0f;  // Hz - one full oscillation every 1 s
-      const uint32_t period_ticks = (uint32_t)(1.0f / (freq * FOC_TS));
-      float t = (float)mit_tick * FOC_TS;
-      if (++mit_tick >= period_ticks) {
-        mit_tick = 0;
-        uint32_t now_ms = HAL_GetTick();
-        // printf("period elapsed: %lu ms\n", now_ms - period_start_ms);
-        period_start_ms = now_ms;
-      }
-
-      hfoc.mit_cmd.kp = 20.0f;
-      hfoc.mit_cmd.kd = 0.2f;
-      // Sine between 0° and 180°: center 90°, amplitude 90°
-      hfoc.mit_cmd.des_pos = PI / 2.0f + PI / 2.0f * fast_sin(TWO_PI * freq * t);
-      // Feedforward velocity (rad/s):
-      hfoc.mit_cmd.des_vel = 0.0f;
-      hfoc.mit_cmd.f_tau = 0.0f;
-      foc_mit_control_update(&hfoc);
-      foc_current_control_update(&hfoc, FOC_TS);
-      break;
-    }
-    case ENCODER_MODE:
-      // Motor coasts; angle is updated by the SPI interrupt.
-      // Raw vs compensated comparison is printed in the main loop.
-      open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
-      break;
-    case SET_ZERO_MODE:
-      // Coast while main loop captures zero and saves to flash
-      open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
-      break;
-    case POWER_UP_MODE:
-      // open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
-      break;
-    case CALIBRATION_MODE:
-      foc_cal_encoder_misalignment_update(&hfoc, &hcal, FOC_TS);
-      break;
-    default:
-      break;
-  }
-  
-}
-
 /* USER CODE END 0 */
 
 /**
@@ -219,7 +117,7 @@ int main(void)
   if(CAN_MASTER==-1){CAN_MASTER = 0;}
   if(CAN_TIMEOUT==-1){CAN_TIMEOUT = 10000;}
   if(isnan(R_NOMINAL) || R_NOMINAL==-1){R_NOMINAL = 0.0f;}
-  if(isnan(TEMP_MAX) || TEMP_MAX==-1){TEMP_MAX = 125.0f;}
+  // if(isnan(TEMP_MAX) || TEMP_MAX==-1){TEMP_MAX = 125.0f;}
   if(isnan(I_MAX_CONT) || I_MAX_CONT==-1){I_MAX_CONT = 14.0f;}
   if(isnan(I_CAL)||I_CAL==-1){I_CAL = 2.0f;}
   I_CAL=5.0f;
@@ -228,8 +126,8 @@ int main(void)
   if(isnan(KT) || KT==-1){KT = 1.0f;}
   if(isnan(KP_MAX) || KP_MAX==-1){KP_MAX = 500.0f;}
   if(isnan(KD_MAX) || KD_MAX==-1){KD_MAX = 5.0f;}
-  if(isnan(P_MAX)){P_MAX = 12.5f;}
-  if(isnan(P_MIN)){P_MIN = -12.5f;}
+  if(isnan(P_MAX)){P_MAX = 12.57f;}
+  if(isnan(P_MIN)){P_MIN = -12.57f;}
   if(isnan(V_MAX)){V_MAX = 65.0f;}
   if(isnan(V_MIN)){V_MIN = -65.0f;}
 
@@ -254,6 +152,8 @@ int main(void)
   MX_TIM1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  can_rx_init(&can_rx);
+  can_tx_init(&can_tx);
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
   if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
   {
@@ -314,7 +214,10 @@ int main(void)
   pid_set_deadband(&hfoc.speed_ctrl, 0.01f);
 
   	// current sensor
-  hfoc.control_mode = POWER_UP_MODE;
+  hfoc.control_mode  = MENU_MODE;
+  hfsm.state         = MENU_MODE;
+  hfsm.next_state    = MENU_MODE;
+  hfsm.ready         = 1;
   CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
@@ -418,55 +321,13 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-// CAN protocol
-//  ID = CAN_ID   : mode switch  – data[0] = motor_mode_t value
-//  ID = CAN_ID+1 : MIT command  – 8 bytes
-//    [0..1] int16  des_pos  scaled over [P_MIN .. P_MAX]   (rad)
-//    [2..3] int16  des_vel  scaled over [V_MIN .. V_MAX]   (rad/s)
-//    [4..5] uint16 kp       scaled over [0 .. KP_MAX]
-//    [6..7] uint16 des_kd   scaled over [0 .. KD_MAX]
-//
-// Scaling helpers (matches MIT mini-cheetah convention):
-//   float = lo + (int16 + 32768) / 65535 * (hi - lo)
-static inline float scale_int16(int16_t raw, float lo, float hi)
-{
-    return lo + ((float)(raw + 32768) / 65535.0f) * (hi - lo);
-}
-static inline float scale_uint16(uint16_t raw, float hi)
-{
-    return ((float)raw / 65535.0f) * hi;
-}
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
-{
-    CAN_RxHeaderTypeDef hdr;
-    uint8_t data[8];
-
-    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &hdr, data) != HAL_OK)
-        return;
-
-    uint32_t id = hdr.ExtId;
-
-    if (id == (uint32_t)CAN_ID) {
-        // Mode switch: single byte
-        g_can_cmd.mode         = (motor_mode_t)data[0];
-        g_can_cmd.mode_pending = 1;
-    }
-    else if (id == (uint32_t)(CAN_ID + 1) && hdr.DLC == 8) {
-        // MIT command: 8-byte packed
-        int16_t  raw_pos = (int16_t)((data[0] << 8) | data[1]);
-        int16_t  raw_vel = (int16_t)((data[2] << 8) | data[3]);
-        uint16_t raw_kp  = (uint16_t)((data[4] << 8) | data[5]);
-        uint16_t raw_kd  = (uint16_t)((data[6] << 8) | data[7]);
-
-        g_can_cmd.des_pos    = scale_int16(raw_pos, P_MIN, P_MAX);
-        g_can_cmd.des_vel    = scale_int16(raw_vel, V_MIN, V_MAX);
-        g_can_cmd.kp         = scale_uint16(raw_kp, KP_MAX);
-        g_can_cmd.kd         = scale_uint16(raw_kd, KD_MAX);
-        g_can_cmd.mit_pending = 1;
-    }
-}
+// CAN RX is now handled entirely in CAN1_RX0_IRQHandler (stm32f4xx_it.c).
+// Protocol: CAN_ID, 8 bytes.
+//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFC  → enter torque control (MOTOR_CMD)
+//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFD  → return to menu      (MENU_CMD)
+//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFE  → set mechanical zero  (ZERO_CMD)
+//   otherwise                                → MIT pos/vel/kp/kd command
+// Reply: 6 bytes, position/velocity/current packed as int16.
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
@@ -490,7 +351,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if (hadc->Instance == ADC2) {
   }
 	if (hadc->Instance == ADC3) {
-    foc_loop();
+    run_fsm(&hfsm);
 	}
   
 }

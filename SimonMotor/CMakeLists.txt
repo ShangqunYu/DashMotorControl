@@ -55,6 +55,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/MotorControl/Src/foc_calibration.c
     Libraries/MotorControl/Src/angle_sensor.c
     Libraries/MotorControl/Src/analog_sensor.c
+    Libraries/MotorControl/Src/fsm.c
     Libraries/MotorControl/Src/pid_utils.c
 )
 

@@ -219,6 +219,6 @@ void foc_cal_lut_postprocess(foc_t *hfoc, CalStruct *hcal) {
     }
 
     hfoc->angle_sensor.lut_ready = 1;
-    hfoc->control_mode           = POWER_UP_MODE;
+    hfoc->control_mode           = MENU_MODE;
     hcal->cal_state              = CAL_STATE_IDLE;
 }

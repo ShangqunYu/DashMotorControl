@@ -18,15 +18,16 @@
 
 
 typedef enum {
+	MENU_MODE,           // idle / serial menu
 	TORQUE_CONTROL_MODE,
 	SPEED_CONTROL_MODE,
 	POSITION_CONTROL_MODE,
 	CALIBRATION_MODE,
 	MIT_MODE,
-	POWER_UP_MODE,
-	ENCODER_MODE,    // motor coast; prints raw vs LUT-compensated angle for verification
-	SET_ZERO_MODE,   // capture current position as mechanical zero, then return to ENCODER_MODE
-}motor_mode_t;
+	ENCODER_MODE,    // motor coast; prints raw vs LUT-compensated angle
+	SET_ZERO_MODE,   // capture current position as mechanical zero
+	SETUP_MODE,      // serial parameter configuration
+} motor_state;
 
 typedef enum {
   RS, LD, LQ
@@ -68,6 +69,7 @@ typedef struct {
 	float va, vb, vc;
 	float ia, ib, ic;
 	float v_bus;
+	float motor_temp;
 	float i_bus;
 
 	float I_ctrl_bandwidth;
@@ -78,7 +80,7 @@ typedef struct {
 
 	PID_Controller_t id_ctrl, iq_ctrl;
 	PID_Controller_t speed_ctrl;
-	motor_mode_t control_mode;
+	motor_state control_mode;
 
 	float gear_ratio;
 

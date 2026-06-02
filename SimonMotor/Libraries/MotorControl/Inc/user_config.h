@@ -20,7 +20,7 @@ extern "C" {
 #define THETA_MAX               __float_reg[5]                                  // Maximum position setpoint
 #define I_FW_MAX                __float_reg[6]                                  // Maximum field weakening current
 #define R_NOMINAL               __float_reg[7]                                  // Nominal motor resistance, set during calibration
-#define TEMP_MAX                __float_reg[8]                                  // Temperature safety lmit
+// #define TEMP_MAX                __float_reg[8]                                  // Temperature safety lmit
 #define I_MAX_CONT              __float_reg[9]                                  // Continuous max current
 #define PPAIRS					__float_reg[10]									// Number of motor pole-pairs
 //#define L_D						__float_reg[11]									// D-axis inductance

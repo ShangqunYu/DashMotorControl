@@ -18,14 +18,6 @@
 #define PWM_ISR			TIM1_UP_TIM10_IRQn	// PWM Timer ISR
 #define CAN_ISR			CAN1_RX0_IRQn		// CAN Receive ISR
 
-/* ADC */
-
-#define ADC_CH_MAIN		hadc1				// ADC channel handle which drives simultaneous mode
-#define ADC_CH_IA		hadc1					// Phase A current sense ADC channel handle.  0 = unused
-#define ADC_CH_IB		hadc2				// Phase B current sense ADC channel handle.  0 = unused
-#define ADC_CH_IC		0				// Phase C current sense ADC channel handle.  0 = unused
-#define ADC_CH_VBUS		hadc3				// Bus voltage ADC channel handle.  0 = unused
-
 /* DRV Gate drive */
 #define ENABLE_PIN 		GPIOA, GPIO_PIN_11  // Enable gate drive pin.
 #define DRV_SPI			hspi1				// DRV SPI handle
@@ -50,9 +42,16 @@
 #define DTC_MAX 			0.94f          	// Max duty cycle
 #define DTC_MIN 			0.0f          	// Min duty cycle
 #define DTC_COMP 			0.000f          // deadtime compensation (100 ns / 25 us)
-#define DT					.000025f		// Loop period
+#define BLDC_PWM_FREQ           40000
+#define FOC_TS                  (1.0f / (float)BLDC_PWM_FREQ)
+#define SPEED_CONTROL_CYCLE     10
+#define SPEED_TS                (FOC_TS * SPEED_CONTROL_CYCLE)
 #define EN_ENC_LINEARIZATION 1				// Enable/disable encoder linearization
+#define V_BUS_MIN           0.0f			// min drive voltage (faults below this)
 #define V_BUS_MAX			60.0f			// max drive voltage (faults above this)
+#define TEMP_MIN           -40.0f          // min temperature (C) (faults below this)
+#define TEMP_MAX           125.0f          // max temperature (C) (faults above this)
+#define TORQUE_MAX         10.0f           // max torque (N-m) 
 
 /* Current controller */
 #define L_D .00004f				// D axis inductance

@@ -35,13 +35,8 @@ extern "C" {
 extern CAN_HandleTypeDef hcan1;
 
 /* USER CODE BEGIN Private defines */
-#define KP_MIN 0.0f
-#define KD_MIN 0.0f
 #define T_MIN -18.0f
 #define T_MAX 18.0f
-#define VB_MIN 0.0f
-#define VB_MAX 60.0f
-#define SENSE_BUFFER 0.0f
 /* USER CODE END Private defines */
 
 void MX_CAN1_Init(void);
@@ -56,12 +51,13 @@ typedef struct{
 
 typedef struct{
 	uint8_t id;
-	uint8_t data[7];
+	uint8_t data[8];
 	CAN_TxHeaderTypeDef tx_header;
 }CANTxMessage ;
 
+void can_rx_init(CANRxMessage *msg);
 void can_tx_init(CANTxMessage *msg);
-void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb);
+void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb, float temp);
 void unpack_cmd(CANRxMessage msg, float *commands);
 /* USER CODE END Prototypes */
 

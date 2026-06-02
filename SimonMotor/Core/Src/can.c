@@ -56,19 +56,7 @@ void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-  CAN_FilterTypeDef canfilterconfig;
-  canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
-  canfilterconfig.FilterBank = 10;
-  canfilterconfig.FilterFIFOAssignment = CAN_RX_FIFO0;
-  canfilterconfig.FilterIdHigh = CAN_ID >> 13 & 0xFFFF;
-  canfilterconfig.FilterIdLow  = CAN_ID << 3 & 0xFFF8;
-  canfilterconfig.FilterMaskIdHigh = FILTER_MASK >> 13 & 0xFFFF;
-  canfilterconfig.FilterMaskIdLow = FILTER_MASK << 3 & 0xFFF8;
 
-  canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
-  canfilterconfig.FilterScale=CAN_FILTERSCALE_32BIT;
-  canfilterconfig.SlaveStartFilterBank = 0;
-  HAL_CAN_ConfigFilter(&hcan1, &canfilterconfig);
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -132,18 +120,36 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+void can_rx_init(CANRxMessage *msg){
+  msg->filter.FilterActivation = CAN_FILTER_ENABLE;
+  msg->filter.FilterBank = 10;
+  msg->filter.FilterFIFOAssignment = CAN_RX_FIFO0;
+  msg->filter.FilterIdHigh = CAN_ID >> 13 & 0xFFFF;
+  msg->filter.FilterIdLow  = CAN_ID << 3 & 0xFFF8;
+  msg->filter.FilterMaskIdHigh = FILTER_MASK >> 13 & 0xFFFF;
+  msg->filter.FilterMaskIdLow = FILTER_MASK << 3 & 0xFFF8;
+  msg->filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  msg->filter.FilterScale=CAN_FILTERSCALE_32BIT;
+  msg->filter.SlaveStartFilterBank = 0;
+	HAL_CAN_ConfigFilter(&CAN_H, &msg->filter);
+}
+
+
+
 void can_tx_init(CANTxMessage *msg){
-	msg->tx_header.DLC = 7; 			// message size of 7 byte
-	msg->tx_header.IDE=CAN_ID_STD; 		// set identifier to standard
+	msg->tx_header.DLC = 8; 			// message size of 8 byte
+	msg->tx_header.IDE=CAN_ID_EXT; 		// set identifier to standard
 	msg->tx_header.RTR=CAN_RTR_DATA; 	// set data type to remote transmission request?
 	msg->tx_header.StdId = CAN_MASTER;  // recipient CAN ID
 }
 
-void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb){
+void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb, float temp){
     int p_int = float_to_uint(p, P_MIN, P_MAX, 16);
     int v_int = float_to_uint(v, V_MIN, V_MAX, 12);
-    int t_int = float_to_uint(t, -(I_MAX+SENSE_BUFFER)*KT*GR, (I_MAX+SENSE_BUFFER)*KT*GR, 12);
-    int vb_int = float_to_uint(vb, VB_MIN, VB_MAX, 8);
+    int t_int = float_to_uint(t, -I_MAX*KT*GR, I_MAX*KT*GR, 12);
+    int vb_int = float_to_uint(vb, V_BUS_MIN, V_BUS_MAX, 8);
+    int temp_int = float_to_uint(temp, TEMP_MIN, TEMP_MAX, 8);
     msg->data[0] = id;
     msg->data[1] = p_int>>8;
     msg->data[2] = p_int&0xFF;
@@ -151,6 +157,7 @@ void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float 
     msg->data[4] = ((v_int&0xF)<<4) + (t_int>>8);
     msg->data[5] = t_int&0xFF;
     msg->data[6] = vb_int;
+    msg->data[7] = temp_int;
     }
 
 void unpack_cmd(CANRxMessage msg, float *commands){// ControllerStruct * controller){
@@ -162,10 +169,9 @@ void unpack_cmd(CANRxMessage msg, float *commands){// ControllerStruct * control
 
     commands[0] = uint_to_float(p_int, P_MIN, P_MAX, 16);
     commands[1] = uint_to_float(v_int, V_MIN, V_MAX, 12);
-    commands[2] = uint_to_float(kp_int, KP_MIN, KP_MAX, 12);
-    commands[3] = uint_to_float(kd_int, KD_MIN, KD_MAX, 12);
+    commands[2] = uint_to_float(kp_int, 0, KP_MAX, 12);
+    commands[3] = uint_to_float(kd_int, 0, KD_MAX, 12);
     commands[4] = uint_to_float(t_int, -I_MAX*KT*GR, I_MAX*KT*GR, 12);
-// printf("Received %.3f  %.3f  %.3f  %.3f  %.3f\r\n", commands[0], commands[1], commands[2], commands[3], commands[4]);
 }
 /* USER CODE END 1 */
 

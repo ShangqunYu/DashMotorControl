@@ -144,7 +144,7 @@ void startMotorMgrTask(void *argument)
       M_ZERO_RAD = hfoc.angle_sensor.m_zero;
       osSemaphoreRelease(flash_write_sem);
       printf("Mechanical zero set: m_zero=%.4f rad\r\n", hfoc.angle_sensor.m_zero);
-      hfoc.control_mode = POWER_UP_MODE;
+      hfoc.control_mode = MENU_MODE;
     }
 
     if (hcal.cal_state == CAL_STATE_LUT_POSTPROC_PENDING) {
