@@ -255,7 +255,7 @@ void CAN1_RX0_IRQHandler(void)
   /* Regular MIT position/velocity/gain command */
   if (can_rx.rx_header.DLC == 8) {
     unpack_cmd(can_rx, (float *)hfoc.mit_buf.commands);
-    hfoc.mit_pending = 1;
+    hfoc.new_cmd = 1;
   }
 
   /* USER CODE END CAN1_RX0_IRQn 1 */

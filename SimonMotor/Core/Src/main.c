@@ -344,6 +344,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if (hadc->Instance == ADC2) {
   }
 	if (hadc->Instance == ADC3) {
+    CurrentSensor_sample_offset(&hfoc.current_sensor);
     run_fsm(&hfsm);
 	}
   

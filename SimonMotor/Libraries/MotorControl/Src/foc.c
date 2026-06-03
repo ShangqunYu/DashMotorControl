@@ -86,10 +86,6 @@ void foc_mit_control_update(foc_t *hfoc){
 }
 
 void foc_update_velocity(foc_t *hfoc, float Ts) {
-    if (hfoc == NULL || Ts <= 0.0f) {
-        return;
-    }
-
     // Compute mechanical velocity in rad/s from LUT-corrected angle delta
     angle_sensor_update_velocity(&hfoc->angle_sensor, Ts);
 

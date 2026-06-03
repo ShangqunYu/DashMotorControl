@@ -102,7 +102,7 @@ typedef struct {
 
 	MIT_CMD          mit_cmd;
 	volatile MIT_CMD mit_buf;
-	volatile uint8_t mit_pending;
+	volatile uint8_t new_cmd;
 } foc_t;
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit);

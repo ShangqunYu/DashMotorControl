@@ -23,7 +23,7 @@ typedef enum {
 } dir_mode_t;
 
 /* ── Velocity filter constants ───────────────────────────────────────────── */
-#define VEL_FILTER_ALPHA  0.71539f   // IIR coefficient (same as MA732 RPM filter)
+#define VEL_FILTER_ALPHA  0.71539f / 4.0   // IIR coefficient (same as MA732 RPM filter)
 #define MAX_VEL_JUMP      5.24f      // rad/s spike rejection threshold (~50 RPM)
 #define VEL_ZERO_THRESH   0.01f      // rad/s — clamp to 0 below this (~0.1 RPM)
 

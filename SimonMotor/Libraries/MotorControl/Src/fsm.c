@@ -34,13 +34,12 @@ void run_fsm(FSMStruct *fsmstate)
 {
     /* 1. Per-cycle pre-processing ----------------------------------------- */
     hfoc.v_bus = get_power_voltage();
-    CurrentSensor_sample_offset(&hfoc.current_sensor);
     foc_update_velocity(&hfoc, FOC_TS);
 
     /* 2. Apply pending MIT parameters (not a mode change) ----------------- */
-    if (hfoc.mit_pending) {
+    if (hfoc.new_cmd) {
         hfoc.mit_cmd    = hfoc.mit_buf;
-        hfoc.mit_pending = 0;
+        hfoc.new_cmd = 0;
     }
 
     /* 3. FSM transition management ---------------------------------------- */
@@ -129,6 +128,11 @@ void fsm_enter_state(FSMStruct *fsmstate)
             foc_current_control_update(&hfoc, 0.0f);   /* reset PI integrators */
             HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
             fsmstate->ready = 1;
+            hfoc.mit_cmd.kd =0;
+            hfoc.mit_cmd.kp = 0;
+            hfoc.mit_cmd.t_ff = 0;
+            hfoc.mit_cmd.p_des = 0;
+            hfoc.mit_cmd.v_des = 0;
             break;
 
         case CALIBRATION_MODE:

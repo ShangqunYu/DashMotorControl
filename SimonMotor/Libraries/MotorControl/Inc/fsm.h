@@ -27,7 +27,7 @@ extern "C" {
 
 /* ── CAN MIT command buffer ───────────────────────────────────────────────
  * Written by the CAN ISR into hfoc.mit_buf; consumed by run_fsm via
- * hfoc.mit_pending every FOC cycle.
+ * hfoc.new_cmd every FOC cycle.
  */
 
 /* ── FSM state struct ─────────────────────────────────────────────────────

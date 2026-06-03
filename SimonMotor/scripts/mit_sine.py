@@ -17,7 +17,10 @@ Examples:
 import sys
 import math
 import time
+import collections
 import can
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
 
 CHANNEL = sys.argv[1] if len(sys.argv) > 1 else "can0"
 CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
@@ -37,13 +40,14 @@ T_MIN   = -18.0     # N-m
 T_MAX   =  18.0     # N-m
 
 # ── Sine trajectory parameters ────────────────────────────────────────────────
-AMPLITUDE   = 2.0   # rad   (peak displacement from zero)
-FREQUENCY   = 1   # Hz
+AMPLITUDE   = 0   # rad   (peak displacement from zero)
+FREQUENCY   = 0.5   # Hz
 UPDATE_HZ   = 100   # command rate
+CENTER      = 0   # rad   (center of sine wave; set to current position to avoid jumps)
 
 # ── Control gains ─────────────────────────────────────────────────────────────
-KP = 20.0   # N-m/rad
-KD = 0.2    # N-m·s/rad
+KP = 20   # N-m/rad
+KD = 0    # N-m·s/rad
 
 
 def float_to_uint(x, x_min, x_max, bits):
@@ -107,6 +111,78 @@ def decode_reply(msg):
     return motor_id, position, velocity, torque, vbus, temp
 
 
+PLOT_WINDOW_S    = 10    # seconds of history shown
+PLOT_UPDATE_EVERY = 5   # update plot every N control iterations (~20 Hz)
+
+
+class LivePlot:
+    def __init__(self, window_s=PLOT_WINDOW_S, update_every=PLOT_UPDATE_EVERY):
+        self._every   = update_every
+        self._counter = 0
+        maxlen = int(window_s * UPDATE_HZ)
+        self._t   = collections.deque(maxlen=maxlen)
+        self._des = collections.deque(maxlen=maxlen)
+        self._act = collections.deque(maxlen=maxlen)
+        self._vel = collections.deque(maxlen=maxlen)
+        self._tor = collections.deque(maxlen=maxlen)
+        self._dt  = collections.deque(maxlen=maxlen)
+
+        self.should_be_running = True
+
+        plt.ion()
+        self._fig, (self._ax, self._ax_vel, self._ax_tor, self._ax_dt) = plt.subplots(4, 1, sharex=True)
+        self._fig.subplots_adjust(bottom=0.12, hspace=0.45)
+
+        self._line_des, = self._ax.plot([], [], label="desired", color="tab:blue",   marker=".", markersize=6)
+        self._line_act, = self._ax.plot([], [], label="actual",  color="tab:orange", marker=".", markersize=6)
+        self._ax.set_ylabel("position (rad)")
+        self._ax.legend()
+        self._ax.grid(True)
+
+        self._line_vel, = self._ax_vel.plot([], [], color="tab:purple", marker=".", markersize=6)
+        self._ax_vel.set_ylabel("velocity (rad/s)")
+        self._ax_vel.grid(True)
+
+        self._line_tor, = self._ax_tor.plot([], [], color="tab:red", marker=".", markersize=6)
+        self._ax_tor.set_ylabel("torque (N·m)")
+        self._ax_tor.grid(True)
+
+        self._line_dt, = self._ax_dt.plot([], [], color="tab:green", marker=".", markersize=6)
+        self._ax_dt.axhline(1.0 / UPDATE_HZ, color="gray", linestyle="--", linewidth=1, label=f"target ({1000/UPDATE_HZ:.1f} ms)")
+        self._ax_dt.set_xlabel("time (s)")
+        self._ax_dt.set_ylabel("dt (s)")
+        self._ax_dt.legend()
+        self._ax_dt.grid(True)
+
+        ax_btn = self._fig.add_axes([0.4, 0.02, 0.2, 0.04])
+        self._btn = Button(ax_btn, "Stop Motor")
+        self._btn.on_clicked(lambda _: setattr(self, "should_be_running", False))
+
+    def update(self, t, des, actual, vel, torque):
+        dt = t - self._t[-1] if self._t else 0.0
+        self._t.append(t)
+        self._des.append(des)
+        self._act.append(actual)
+        self._vel.append(vel)
+        self._tor.append(torque)
+        self._dt.append(dt)
+        self._counter += 1
+        if self._counter % self._every == 0:
+            self._line_des.set_data(self._t, self._des)
+            self._line_act.set_data(self._t, self._act)
+            self._line_vel.set_data(self._t, self._vel)
+            self._line_tor.set_data(self._t, self._tor)
+            self._line_dt.set_data(self._t, self._dt)
+            for ax in (self._ax, self._ax_vel, self._ax_tor, self._ax_dt):
+                ax.relim()
+                ax.autoscale_view()
+            self._fig.canvas.flush_events()
+
+    def close(self):
+        plt.ioff()
+        plt.show(block=True)
+
+
 def main():
     print(f"Opening {CHANNEL} ...")
     try:
@@ -119,16 +195,18 @@ def main():
         send_mode(bus, MIT_MODE)
         time.sleep(0.1)
 
+        plot = LivePlot()
         dt = 1.0 / UPDATE_HZ
         t0 = time.monotonic()
         print(f"Running sine: amplitude={AMPLITUDE} rad  freq={FREQUENCY} Hz  — Ctrl+C to stop")
 
-        while True:
+        while plot.should_be_running:
             t = time.monotonic() - t0
-            des_pos = AMPLITUDE * math.sin(2 * math.pi * FREQUENCY * t)
-            des_vel = AMPLITUDE * 2 * math.pi * FREQUENCY * math.cos(2 * math.pi * FREQUENCY * t)
+            des_pos = AMPLITUDE * math.sin(2 * math.pi * FREQUENCY * t) +CENTER
+            des_vel = 0  #AMPLITUDE * 2 * math.pi * FREQUENCY * math.cos(2 * math.pi * FREQUENCY * t)
 
             send_mit(bus, des_pos, des_vel, KP, KD)
+            # breakpoint()
 
             reply = bus.recv(timeout=dt)
             if reply is not None:
@@ -136,10 +214,16 @@ def main():
                 if result:
                     mid, pos, vel, torque, vbus, temp = result
                     print(f"t={t:6.2f}s  des={des_pos:+.3f}  pos={pos:+.3f}  vel={vel:+.3f}  τ={torque:+.3f}  vbus={vbus:.1f}V  temp={temp:.1f}C")
+                    plot.update(t, des_pos, pos, vel, torque)
 
             elapsed = time.monotonic() - t0 - t
-            if elapsed < dt:
-                time.sleep(dt - elapsed)
+            remaining = dt - elapsed
+            if remaining > 0:
+                plt.pause(remaining)
+
+        print("\nStopping — sending MENU_MODE ...")
+        send_mode(bus, MENU_MODE)
+        plot.close()
 
     except KeyboardInterrupt:
         print("\nStopping — sending MENU_MODE ...")
