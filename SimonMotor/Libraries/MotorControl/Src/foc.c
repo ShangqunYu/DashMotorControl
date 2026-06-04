@@ -12,6 +12,14 @@
 #include "tim.h"
 #include <math.h>
 
+void foc_zero_commands(foc_t *hfoc) {
+    hfoc->mit_cmd.kd    = 0;
+    hfoc->mit_cmd.kp    = 0;
+    hfoc->mit_cmd.t_ff  = 0;
+    hfoc->mit_cmd.p_des = 0;
+    hfoc->mit_cmd.v_des = 0;
+}
+
 void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir) {
 	if (hfoc == NULL) return;
 

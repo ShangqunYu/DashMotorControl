@@ -40,14 +40,14 @@ T_MIN   = -18.0     # N-m
 T_MAX   =  18.0     # N-m
 
 # ── Sine trajectory parameters ────────────────────────────────────────────────
-AMPLITUDE   = 0   # rad   (peak displacement from zero)
-FREQUENCY   = 0.5   # Hz
+AMPLITUDE   = 3.14   # rad   (peak displacement from zero)
+FREQUENCY   = 1   # Hz
 UPDATE_HZ   = 100   # command rate
 CENTER      = 0   # rad   (center of sine wave; set to current position to avoid jumps)
 
 # ── Control gains ─────────────────────────────────────────────────────────────
 KP = 20   # N-m/rad
-KD = 0    # N-m·s/rad
+KD = 0.2    # N-m·s/rad
 
 
 def float_to_uint(x, x_min, x_max, bits):

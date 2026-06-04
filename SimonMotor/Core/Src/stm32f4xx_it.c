@@ -247,6 +247,7 @@ void CAN1_RX0_IRQHandler(void)
       case MENU_MODE: update_fsm(&hfsm, MENU_CMD);  break;  /* return to menu / disable */
       case SET_ZERO_MODE: update_fsm(&hfsm, ZERO_CMD);  break;  /* set mechanical zero */
       case CALIBRATION_MODE: update_fsm(&hfsm, CAL_CMD); break;  /* enter calibration mode */
+      case ENCODER_MODE: update_fsm(&hfsm, ENCODER_CMD); break;  /* enter encoder display mode */
       default:   break;
     }
     return;

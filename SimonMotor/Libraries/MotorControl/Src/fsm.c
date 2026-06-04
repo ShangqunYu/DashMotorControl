@@ -128,11 +128,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
             foc_current_control_update(&hfoc, 0.0f);   /* reset PI integrators */
             HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
             fsmstate->ready = 1;
-            hfoc.mit_cmd.kd =0;
-            hfoc.mit_cmd.kp = 0;
-            hfoc.mit_cmd.t_ff = 0;
-            hfoc.mit_cmd.p_des = 0;
-            hfoc.mit_cmd.v_des = 0;
+            foc_zero_commands(&hfoc);
             break;
 
         case CALIBRATION_MODE:

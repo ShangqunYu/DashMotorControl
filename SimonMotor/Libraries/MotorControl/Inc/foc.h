@@ -105,6 +105,7 @@ typedef struct {
 	volatile uint8_t new_cmd;
 } foc_t;
 
+void foc_zero_commands(foc_t *hfoc);
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
 void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
