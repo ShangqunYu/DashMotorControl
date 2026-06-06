@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include "foc.h"
 #include "foc_calibration.h"
+#include "fsm.h"
 #include "angle_sensor.h"
 #include "user_config.h"
 #include "preference_writer.h"
@@ -53,6 +54,7 @@
 /* USER CODE BEGIN Variables */
 extern foc_t       hfoc;
 extern CalStruct   hcal;
+extern FSMStruct   hfsm;
 extern PreferenceWriter prefs;
 
 static osSemaphoreId_t flash_write_sem;
@@ -139,12 +141,12 @@ void startMotorMgrTask(void *argument)
   {
     osDelay(10);
 
-    if (hfoc.control_mode == SET_ZERO_MODE) {
+    if (hfsm.curr_state == SET_ZERO_MODE) {
       angle_sensor_set_m_zero(&hfoc.angle_sensor);
       M_ZERO_RAD = hfoc.angle_sensor.m_zero;
       osSemaphoreRelease(flash_write_sem);
       printf("Mechanical zero set: m_zero=%.4f rad\r\n", hfoc.angle_sensor.m_zero);
-      hfoc.control_mode = MENU_MODE;
+      hfsm.next_state = MENU_MODE;
     }
 
     if (hcal.cal_state == CAL_STATE_LUT_POSTPROC_PENDING) {
@@ -157,7 +159,7 @@ void startMotorMgrTask(void *argument)
       printf("LUT calibration complete, saved to flash\r\n");
     }
 
-    if (hfoc.control_mode == ENCODER_MODE) {
+    if (hfsm.curr_state == ENCODER_MODE) {
       printf("m_angle_raw:  %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad_raw);
       printf("m_angle_comp: %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad);
     }
@@ -173,7 +175,6 @@ void startMotorMgrTask(void *argument)
     // printf("i_c: %.3f\r\n",      hfoc.current_sensor.ic_filtered);
     // printf("m_angle: %.4f\r\n",  hfoc.angle_sensor.s_rotor_rad);
     // printf("e_angle: %.4f\r\n",  hfoc.angle_sensor.e_rad);
-    // printf("rpm: %.3f\r\n",      hfoc.angle_sensor.rotor_vel);
     // printf("rpm_ref: %.3f\r\n",  hfoc.vel_ref);
   }
   /* USER CODE END startMotorMgrTask */

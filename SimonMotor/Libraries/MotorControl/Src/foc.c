@@ -21,17 +21,11 @@ void foc_zero_commands(foc_t *hfoc) {
 }
 
 void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir) {
-	if (hfoc == NULL) return;
-
 	hfoc->angle_sensor.e_zero = e_zero_rad;
 	hfoc->angle_sensor.sensor_dir = sensor_dir;
 }
 
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim) {
-	if (hfoc == NULL || htim == NULL) {
-		return;
-	}
-
 	hfoc->timer = htim;
 	hfoc->pwm_resolution = __HAL_TIM_GET_AUTORELOAD(htim);
 }
@@ -67,18 +61,11 @@ void svm(float v_max, float u, float v, float w,
 }
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit) {
-	if (hfoc == NULL) return;
-
 	hfoc->max_current = i_limit;
 }
 
 void foc_speed_control_update(foc_t *hfoc, float vel_reference) {
-	if (hfoc == NULL || (hfoc->control_mode != SPEED_CONTROL_MODE && hfoc->control_mode != POSITION_CONTROL_MODE)) {
-		hfoc->speed_ctrl.integral = 0.0f;
-		hfoc->speed_ctrl.last_error = 0.0f;
-		return;
-	}
-
+    if (hfoc == NULL) return;
     hfoc->id_ref = 0.0f;
     hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, vel_reference - hfoc->angle_sensor.rotor_vel);
 }

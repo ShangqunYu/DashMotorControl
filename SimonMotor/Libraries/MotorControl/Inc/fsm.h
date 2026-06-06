@@ -31,14 +31,12 @@ extern "C" {
  */
 
 /* ── FSM state struct ─────────────────────────────────────────────────────
- * state      : currently executing state
+ * curr_state : currently executing state
  * next_state : requested next state (set from CAN ISR or update_fsm)
- * ready      : 1 once fsm_exit_state has finished cleanup; gate for transition
  */
 typedef struct {
-    motor_state state;
+    motor_state curr_state;
     motor_state next_state;
-    uint8_t     ready;
     char        cmd_buff[8];
     char        bytecount;
     char        cmd_id;

@@ -43,17 +43,14 @@ void run_fsm(FSMStruct *fsmstate)
     }
 
     /* 3. FSM transition management ---------------------------------------- */
-    if (fsmstate->next_state != fsmstate->state) {
+    if (fsmstate->next_state != fsmstate->curr_state) {
         fsm_exit_state(fsmstate);
-        if (fsmstate->ready) {
-            fsmstate->state       = fsmstate->next_state;
-            hfoc.control_mode     = fsmstate->state;
-            fsm_enter_state(fsmstate);
-        }
+        fsmstate->curr_state = fsmstate->next_state;
+        fsm_enter_state(fsmstate);
     }
 
-    /* 4. Execute current state -------------------------------------------- */
-    switch (fsmstate->state) {
+    /* 4. Execute current curr_state -------------------------------------------- */
+    switch (fsmstate->curr_state) {
 
         case MENU_MODE:
         case SETUP_MODE:
@@ -108,16 +105,14 @@ void run_fsm(FSMStruct *fsmstate)
 
 void fsm_enter_state(FSMStruct *fsmstate)
 {
-    switch (fsmstate->state) {
+    switch (fsmstate->curr_state) {
 
         case MENU_MODE:
             enter_menu_state();
-            fsmstate->ready = 1;
             break;
 
         case SETUP_MODE:
             enter_setup_state();
-            fsmstate->ready = 1;
             break;
 
         case TORQUE_CONTROL_MODE:
@@ -127,23 +122,19 @@ void fsm_enter_state(FSMStruct *fsmstate)
             drv_enable_gd(drv);
             foc_current_control_update(&hfoc, 0.0f);   /* reset PI integrators */
             HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
-            fsmstate->ready = 1;
             foc_zero_commands(&hfoc);
             break;
 
         case CALIBRATION_MODE:
             foc_cal_encoder_misalignment_start(&hfoc, &hcal);
             drv_enable_gd(drv);
-            fsmstate->ready = 1;
             break;
 
         case ENCODER_MODE:
         case SET_ZERO_MODE:
-            fsmstate->ready = 1;
             break;
 
         default:
-            fsmstate->ready = 1;
             break;
     }
 }
@@ -152,7 +143,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
 
 void fsm_exit_state(FSMStruct *fsmstate)
 {
-    switch (fsmstate->state) {
+    switch (fsmstate->curr_state) {
 
         case TORQUE_CONTROL_MODE:
         case SPEED_CONTROL_MODE:
@@ -164,18 +155,15 @@ void fsm_exit_state(FSMStruct *fsmstate)
             hfoc.id_ref = 0.0f;
             hfoc.iq_ref = 0.0f;
             HAL_GPIO_WritePin(LED, GPIO_PIN_RESET);
-            fsmstate->ready = 1;
             break;
 
         case MENU_MODE:
         case ENCODER_MODE:
         case SET_ZERO_MODE:
         case SETUP_MODE:
-            fsmstate->ready = 1;
             break;
 
         default:
-            fsmstate->ready = 1;
             break;
     }
 }
@@ -184,32 +172,27 @@ void fsm_exit_state(FSMStruct *fsmstate)
 
 void update_fsm(FSMStruct *fsmstate, char fsm_input)
 {
-    /* ESC always returns to menu from any state */
+    /* ESC always returns to menu from any curr_state */
     if (fsm_input == MENU_CMD) {
         fsmstate->next_state = MENU_MODE;
-        fsmstate->ready = 0;
         return;
     }
 
-    switch (fsmstate->state) {
+    switch (fsmstate->curr_state) {
 
         case MENU_MODE:
             switch (fsm_input) {
                 case CAL_CMD:
                     fsmstate->next_state = CALIBRATION_MODE;
-                    fsmstate->ready = 0;
                     break;
                 case MOTOR_CMD:
                     fsmstate->next_state = MIT_MODE;
-                    fsmstate->ready = 0;
                     break;
                 case ENCODER_CMD:
                     fsmstate->next_state = ENCODER_MODE;
-                    fsmstate->ready = 0;
                     break;
                 case SETUP_CMD:
                     fsmstate->next_state = SETUP_MODE;
-                    fsmstate->ready = 0;
                     break;
                 case ZERO_CMD:
                     angle_sensor_set_m_zero(&hfoc.angle_sensor);

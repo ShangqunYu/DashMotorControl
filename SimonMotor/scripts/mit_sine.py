@@ -41,8 +41,8 @@ T_MAX   =  18.0     # N-m
 
 # ── Sine trajectory parameters ────────────────────────────────────────────────
 AMPLITUDE   = 3.14   # rad   (peak displacement from zero)
-FREQUENCY   = 1   # Hz
-UPDATE_HZ   = 100   # command rate
+FREQUENCY   = 0.1   # Hz
+UPDATE_HZ   = 200   # command rate
 CENTER      = 0   # rad   (center of sine wave; set to current position to avoid jumps)
 
 # ── Control gains ─────────────────────────────────────────────────────────────

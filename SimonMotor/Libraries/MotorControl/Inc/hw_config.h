@@ -51,7 +51,6 @@
 #define V_BUS_MAX			60.0f			// max drive voltage (faults above this)
 #define TEMP_MIN           -40.0f          // min temperature (C) (faults below this)
 #define TEMP_MAX           125.0f          // max temperature (C) (faults above this)
-#define TORQUE_MAX         10.0f           // max torque (N-m) 
 
 /* Current controller */
 #define L_D .00004f				// D axis inductance
@@ -68,9 +67,13 @@
 #define D_INT_LIM V_BUS/(K_D*KI_D)  // Amps*samples
 #define Q_INT_LIM V_BUS/(K_Q*KI_Q)  // Amps*samples
 
-#define FILTER_MASK 0b00000000000000000000011111111
+#define FILTER_MASK 0b00000000000000000000011111111   // CAN ID filter mask (only look at last 8 bits, i.e. 0-255)
 
-
+// timer counts after PWM edge to trigger ADC sampling 
+// (for center-aligned PWM at 40 kHz, timer counts up to 2250, 
+// so 2250 / 25 * 2.5 = 225) we shift the ADC trigger 
+// earlier by 2.5 us to allow for some margin, since the total ADC reading takes about 5 us.
+#define ADC_TRIG_OFFSET 225  
 #define KV 330.0f
 
 #define W_CAL               10.0f   // LUT sweep speed (electrical rad/s)

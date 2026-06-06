@@ -81,7 +81,6 @@ typedef struct {
 
 	PID_Controller_t id_ctrl, iq_ctrl;
 	PID_Controller_t speed_ctrl;
-	motor_state control_mode;
 
 	float gear_ratio;
 

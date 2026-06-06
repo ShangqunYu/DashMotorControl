@@ -70,10 +70,6 @@ foc_t hfoc;
 CalStruct hcal;
 CANTxMessage can_tx;
 CANRxMessage can_rx;
-
-bool pose_ready = false;
-float rpm = 0.0f;
-
 FSMStruct hfsm;
 /* USER CODE END PV */
 
@@ -151,30 +147,31 @@ int main(void)
   MX_TIM1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  /* CAN setup */
   can_rx_init(&can_rx);
   can_tx_init(&can_tx);
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
-
   /* DRV8353 setup */
   drv_init(drv, I_MAX);
 
+  /* MA732 setup */
   MA732_config(&hfoc.angle_sensor.ma732, &ENC_SPI);
   for (int i=0; i<20; i++) {
     MA732_start(&hfoc.angle_sensor.ma732);
     HAL_Delay(10);
   }
 
-    /* Turn on PWM */
+  /* Turn on PWM */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-  // the total adc reading takes about 5us, so set the offset to 2.5us to allow for some margin. 
-  // uint32_t offset = (uint32_t)((htim1.Instance->ARR+ 1) * 2  / 180 * 2.5);
-  uint32_t offset = (uint32_t)(2.5f * 180);
-  htim1.Instance->CCR4 = htim1.Instance->ARR - 240;
+
+  // shift ADC trigger to occur slightly before the PWM edge to allow for sampling during the deadtime
+  htim1.Instance->CCR4 = htim1.Instance->ARR - ADC_TRIG_OFFSET;
 
   foc_sensor_init(&hfoc, 0.0f, NORMAL_DIR);
   foc_timer_init(&hfoc, &htim1);
@@ -208,10 +205,8 @@ int main(void)
   pid_set_deadband(&hfoc.speed_ctrl, 0.01f);
 
   	// current sensor
-  hfoc.control_mode  = MENU_MODE;
-  hfsm.state         = MENU_MODE;
-  hfsm.next_state    = MENU_MODE;
-  hfsm.ready         = 1;
+  hfsm.curr_state = MENU_MODE;
+  hfsm.next_state = MENU_MODE;
   CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
@@ -326,7 +321,6 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
   {
-    pose_ready = true;
     angle_sensor_update(&hfoc.angle_sensor);
   }
 }
