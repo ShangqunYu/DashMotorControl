@@ -4,8 +4,9 @@
 
 #include "angle_sensor.h"
 #include "FOC_math.h"
+#include "math_ops.h"
 #include <string.h>   /* memcpy */
-#include <math.h>     /* floorf, fabsf, copysignf, fminf */
+#include <math.h>     /* floorf, fabsf */
 
 void angle_sensor_init(AngleSensor_t *sensor,
                        uint8_t        pole_pairs,
@@ -21,14 +22,14 @@ void angle_sensor_init(AngleSensor_t *sensor,
     sensor->s_rotor_rad      = 0.0f;
     sensor->s_rotor_rad_raw  = 0.0f;
     sensor->e_rad            = 0.0f;
-    sensor->rotor_vel       = 0.0f;
-    sensor->prev_rotor_vel         = 0.0f;
-    sensor->filtered_rotor_vel     = 0.0f;
+    sensor->rotor_vel  = 0.0f;
+    sensor->pos_hat    = 0.0f;
+    sensor->vel_hat    = 0.0f;
+    sensor->obs_ready  = 0U;
     sensor->lut_ready        = 0U;
     sensor->turns            = 0;
     sensor->first_sample     = 0;
-    sensor->multi_rotor_rad      = 0.0f;
-    sensor->prev_multi_rotor_rad = 0.0f;
+    sensor->multi_rotor_rad  = 0.0f;
 }
 
 void angle_sensor_load_lut(AngleSensor_t *sensor,
@@ -75,18 +76,23 @@ void angle_sensor_update(AngleSensor_t *sensor)
 
     // Multi-turn tracking — skip rollover on first sample to avoid a false jump
     // from uninitialized old_s_angle
+    float diff = sensor->s_rotor_rad - old_s_angle;
+    if      (diff >  PI) sensor->turns--;
+    else if (diff < -PI) sensor->turns++;
+
     uint8_t is_first = !sensor->first_sample;
     if (is_first) {
         sensor->first_sample = 1;
-    } else {
-        float diff = sensor->s_rotor_rad - old_s_angle;
-        if      (diff >  PI) sensor->turns--;
-        else if (diff < -PI) sensor->turns++;
-    }
+        sensor->turns = 0;
+        if (sensor->s_rotor_rad > PI_OVER_2_F) {
+            sensor->turns = -1;
+        } else if (sensor->s_rotor_rad < -PI_OVER_2_F) {
+            sensor->turns = 1;
+        }
+    } 
     sensor->multi_rotor_rad = sensor->s_rotor_rad + TWO_PI * (float)sensor->turns;
     if (sensor->sensor_dir == REVERSE_DIR)
         sensor->multi_rotor_rad = -sensor->multi_rotor_rad;
-    if (is_first) sensor->prev_multi_rotor_rad = sensor->multi_rotor_rad;
 
     // Electrical angle (from e_zero, not m_zero — FOC must stay anchored to e_zero)
     float e_rad = angle_from_ezero * (float)sensor->pole_pairs;
@@ -115,30 +121,23 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
 {
     if (sensor == NULL || Ts <= 0.0f) return;
 
-    float delta = sensor->multi_rotor_rad - sensor->prev_multi_rotor_rad;
-    sensor->prev_multi_rotor_rad = sensor->multi_rotor_rad;
-
-    // Instantaneous velocity in rad/s
-    float vel_instant = delta / Ts;
-
-    // Two-stage spike rejection
-    float vel_delta = vel_instant - sensor->prev_rotor_vel;
-    float abs_delta = fabsf(vel_delta);
-    if (abs_delta > MAX_VEL_JUMP) {
-        float limited = copysignf(fminf(abs_delta * 0.5f, MAX_VEL_JUMP), vel_delta);
-        vel_instant = sensor->prev_rotor_vel + limited;
+    if (!sensor->obs_ready) {
+        sensor->pos_hat   = sensor->multi_rotor_rad;
+        sensor->vel_hat   = 0.0f;
+        sensor->obs_ready = 1U;
     }
 
-    // IIR low-pass filter
-    float filtered = sensor->filtered_rotor_vel * (1.0f - VEL_FILTER_ALPHA)
-                   + vel_instant          * VEL_FILTER_ALPHA;
+    // Predict
+    sensor->pos_hat += Ts * sensor->vel_hat;
 
-    if (fabsf(filtered) < VEL_ZERO_THRESH) {
-        filtered = 0.0f;
-    }
+    // Correct
+    float error = sensor->multi_rotor_rad - sensor->pos_hat;
+    sensor->pos_hat += OBS_L1 * error;
+    sensor->vel_hat += OBS_L2 * error;
 
-    sensor->prev_rotor_vel     = vel_instant;
-    sensor->filtered_rotor_vel = filtered;
+    float vel = sensor->vel_hat;
+    if (fabsf(vel) < VEL_ZERO_THRESH)
+        vel = 0.0f;
 
-    sensor->rotor_vel = filtered;
+    sensor->rotor_vel = vel;
 }

@@ -157,6 +157,22 @@ int main(void)
   /* DRV8353 setup */
   drv_init(drv, I_MAX);
 
+  /* FOC sensor init — must come before MA732 start so the LUT is active
+     from the very first SPI callback */
+  foc_sensor_init(&hfoc,
+      (CALIBRATION_DONE_FLAG == 1) ? E_ZERO_RAD        : 0.0f,
+      (CALIBRATION_DONE_FLAG == 1 && PHASE_ORDER == 1) ? REVERSE_DIR : NORMAL_DIR);
+  if (CALIBRATION_DONE_FLAG == 1) {
+    hfoc.angle_sensor.m_zero     = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
+    hfoc.angle_sensor.pole_pairs = (uint8_t)PPAIRS;
+    memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
+           sizeof(hfoc.angle_sensor.encd_error_comp));
+    hfoc.angle_sensor.lut_ready = 1;
+    printf("Encoder cal loaded: e_zero=%.4f, ppairs=%d, dir=%s\r\n",
+           hfoc.angle_sensor.e_zero, hfoc.angle_sensor.pole_pairs,
+           (hfoc.angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
+  }
+
   /* MA732 setup */
   MA732_config(&hfoc.angle_sensor.ma732, &ENC_SPI);
   for (int i=0; i<20; i++) {
@@ -173,7 +189,6 @@ int main(void)
   // shift ADC trigger to occur slightly before the PWM edge to allow for sampling during the deadtime
   htim1.Instance->CCR4 = htim1.Instance->ARR - ADC_TRIG_OFFSET;
 
-  foc_sensor_init(&hfoc, 0.0f, NORMAL_DIR);
   foc_timer_init(&hfoc, &htim1);
   foc_set_limit_current(&hfoc, 20.0f);
   init_trig_lut();
@@ -221,18 +236,6 @@ int main(void)
   printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
          hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset, hfoc.current_sensor.adc_c_offset);
 
-  if (CALIBRATION_DONE_FLAG == 1) {
-    hfoc.angle_sensor.e_zero     = E_ZERO_RAD;
-    hfoc.angle_sensor.m_zero     = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
-    hfoc.angle_sensor.sensor_dir = (PHASE_ORDER == 1) ? REVERSE_DIR : NORMAL_DIR;
-    hfoc.angle_sensor.pole_pairs = (uint8_t)PPAIRS;
-    memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
-           sizeof(hfoc.angle_sensor.encd_error_comp));
-    hfoc.angle_sensor.lut_ready = 1;
-    printf("Encoder cal loaded: e_zero=%.4f, ppairs=%d, dir=%s\r\n",
-           hfoc.angle_sensor.e_zero, hfoc.angle_sensor.pole_pairs,
-           (hfoc.angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
-  }
   /* USER CODE END 2 */
 
   /* Init scheduler */

@@ -22,10 +22,14 @@ typedef enum {
     REVERSE_DIR
 } dir_mode_t;
 
-/* ── Velocity filter constants ───────────────────────────────────────────── */
-#define VEL_FILTER_ALPHA  0.71539f / 4.0   // IIR coefficient (same as MA732 RPM filter)
-#define MAX_VEL_JUMP      5.24f      // rad/s spike rejection threshold (~50 RPM)
-#define VEL_ZERO_THRESH   0.01f      // rad/s — clamp to 0 below this (~0.1 RPM)
+/* ── Velocity observer constants ─────────────────────────────────────────
+ * Luenberger observer tuned for bandwidth OBS_BW_HZ at 40 kHz.
+ * To retune: p = exp(-2π·fc·Ts), L1 = 2(1-p), L2 = (1-p)²/Ts
+ */
+#define OBS_BW_HZ     200.0f
+#define OBS_L1        0.0311f    // 2·(1−p),      fc=200 Hz, Ts=25 µs
+#define OBS_L2        9.7f     // (1−p)²/Ts,    fc=200 Hz, Ts=25 µs
+#define VEL_ZERO_THRESH   0.01f  // rad/s — clamp to 0 below this (~0.1 RPM)
 
 /* ── Angle / velocity state ──────────────────────────────────────────────── */
 typedef struct {
@@ -38,11 +42,11 @@ typedef struct {
     float m_zero;            // mechanical zero (rad): user-defined position reference
     float e_rad;             // electric angle latched each FOC cycle
 
-    float rotor_vel;        // rotor velocity (rad/s, direction-corrected)
-    float prev_multi_rotor_rad;  // previous multi_rotor_rad for velocity delta
-    float prev_rotor_vel;          // previous instantaneous velocity (spike rejection)
-    float filtered_rotor_vel;      // IIR filter state
-    int turns;               // cumulative turn count for multi-turn support 
+    float rotor_vel;    // rotor velocity (rad/s, direction-corrected)
+    float pos_hat;      // observer: estimated position
+    float vel_hat;      // observer: estimated velocity
+    uint8_t obs_ready;  // 1 once observer has been initialised
+    int turns;                            // cumulative turn count for multi-turn support
 
     uint8_t pole_pairs, first_sample;
     dir_mode_t sensor_dir;
