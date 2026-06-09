@@ -26,9 +26,9 @@ typedef enum {
  * Luenberger observer tuned for bandwidth OBS_BW_HZ at 40 kHz.
  * To retune: p = exp(-2π·fc·Ts), L1 = 2(1-p), L2 = (1-p)²/Ts
  */
-#define OBS_BW_HZ     200.0f
-#define OBS_L1        0.0311f    // 2·(1−p),      fc=200 Hz, Ts=25 µs
-#define OBS_L2        9.7f     // (1−p)²/Ts,    fc=200 Hz, Ts=25 µs
+#define OBS_BW_HZ     25.0f
+#define OBS_L1        0.00784f  // 2·(1−p),      fc=25 Hz, Ts=25 µs
+#define OBS_L2        0.615f    // (1−p)²/Ts,    fc=25 Hz, Ts=25 µs
 #define VEL_ZERO_THRESH   0.01f  // rad/s — clamp to 0 below this (~0.1 RPM)
 
 /* ── Angle / velocity state ──────────────────────────────────────────────── */

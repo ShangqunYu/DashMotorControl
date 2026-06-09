@@ -43,7 +43,7 @@ float MA732_get_rad(MA732_t *encd) {
 
     const uint16_t raw_data = ((uint16_t)encd->spi_rx_buffer[1] << 8) | encd->spi_rx_buffer[0];
 
-    const float angle_raw = (float)(raw_data & 0xFFFF) * ANGLE_SCALE_FACTOR;
+    const float angle_raw = (float)(raw_data >> 2) * ANGLE_SCALE_FACTOR;
 
     float angle_diff = angle_raw - encd->prev_raw_angle;
     angle_diff -= TWO_PI_F * floorf((angle_diff + PI_F) / TWO_PI_F);
