@@ -126,8 +126,6 @@ int main(void)
   if(isnan(V_MAX)){V_MAX = 65.0f;}
   if(isnan(V_MIN)){V_MIN = -65.0f;}
 
-  P_MAX = 1024.0f;
-  P_MIN = -1024.0f;
   
   /* USER CODE END Init */
 
@@ -199,7 +197,7 @@ int main(void)
   pid_reset(&hfoc.id_ctrl);
   pid_set_ts(&hfoc.id_ctrl, FOC_TS);
   pid_set_kp(&hfoc.id_ctrl, 0.04f);
-  pid_set_ki(&hfoc.id_ctrl, 10.0f);
+  pid_set_ki(&hfoc.id_ctrl, 80.0f);
   pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
   pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
 
@@ -207,7 +205,7 @@ int main(void)
   pid_reset(&hfoc.iq_ctrl);
   pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
   pid_set_kp(&hfoc.iq_ctrl, 0.04f);
-  pid_set_ki(&hfoc.iq_ctrl, 10.0f);
+  pid_set_ki(&hfoc.iq_ctrl, 80.0f);
   pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
   pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
 

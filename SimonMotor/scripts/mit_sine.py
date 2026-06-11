@@ -35,7 +35,7 @@ MIT_MODE  = 5
 # ── Scaling ranges — must match flash-stored values on the motor ─────────────
 # P_MIN   = -12.5     # rad
 # P_MAX   =  12.5     # rad
-P_MAX = 1024.0
+P_MAX = 12.57
 P_MIN = -P_MAX
 V_MIN   = -65.0     # rad/s
 V_MAX   =  65.0     # rad/s
@@ -46,7 +46,7 @@ T_MAX   =  40.0     # N-m
 
 # ── Sine trajectory parameters ────────────────────────────────────────────────
 AMPLITUDE   = 0  # rad   (peak displacement from zero)
-FREQUENCY   = 2  # Hz
+FREQUENCY   = 1  # Hz
 UPDATE_HZ   = 50   # command rate
 CENTER      = 0.0   # rad   (center of sine wave)
 
@@ -200,10 +200,10 @@ def main():
             des_pos = AMPLITUDE * math.sin(2 * math.pi * FREQUENCY * t) + CENTER
             des_vel = AMPLITUDE * 2 * math.pi * FREQUENCY * math.cos(2 * math.pi * FREQUENCY * t)
             # overwrite
-            # des_pos = 0.0
-            # des_vel = 6.28
-            # KP = 0.0
-            # KD = 1.0
+            des_pos = 0.0
+            des_vel = 6.28
+            KP = 0.0
+            KD = 1.0
             torque_ff = 0
             shared['des_pos'] = des_pos
 
