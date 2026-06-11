@@ -75,7 +75,7 @@ void foc_mit_control_update(foc_t *hfoc){
     hfoc->id_ref = 0.0f;
     float pos_error = hfoc->mit_cmd.p_des - hfoc->angle_sensor.multi_rotor_rad;
     float vel_error = hfoc->mit_cmd.v_des - hfoc->angle_sensor.rotor_vel;
-    hfoc->iq_ref = hfoc->mit_cmd.kp * pos_error + hfoc->mit_cmd.kd * vel_error;
+    hfoc->iq_ref = hfoc->mit_cmd.kp * pos_error + hfoc->mit_cmd.kd * vel_error + hfoc->mit_cmd.t_ff;
     // Cap iq_ref for safety
     hfoc->iq_ref = CONSTRAIN(hfoc->iq_ref, -10.0f, 10.0f);
 }

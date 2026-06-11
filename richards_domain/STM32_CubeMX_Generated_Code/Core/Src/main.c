@@ -29,24 +29,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "hw_config.h"
-#include "user_config.h"
-#include "math_ops.h"
-#include "stm32f4xx_flash.h"
-#include "flash_writer.h"
-#include "preference_writer.h"
-#include "drv8353.h"
-#include <stdio.h>
-#include <string.h>
-#include "foc.h"
-#include "angle_sensor.h"
-#include "foc_calibration.h"
-#include "pid_utils.h"
-#include "fsm.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -62,15 +50,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-float __float_reg[64];
-int __int_reg[256];
-PreferenceWriter prefs;
-DRVStruct drv;
-foc_t hfoc;
-CalStruct hcal;
-CANTxMessage can_tx;
-CANRxMessage can_rx;
-FSMStruct hfsm;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -82,6 +62,7 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 /* USER CODE END 0 */
 
 /**
@@ -101,34 +82,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  preference_writer_init(&prefs, 6);
-  preference_writer_load(prefs);
-  if(E_ZERO==-1){E_ZERO = 0;}
-  if(M_ZERO==-1){M_ZERO = 0;}
-  if(isnan(I_BW) || I_BW==-1){I_BW = 1000;}
-  if(isnan(I_MAX) || I_MAX ==-1){I_MAX=40;}
-  if(isnan(I_FW_MAX) || I_FW_MAX ==-1){I_FW_MAX=0;}
-  if(CAN_ID==-1){CAN_ID = 1;}
-  if(CAN_MASTER==-1){CAN_MASTER = 0;}
-  if(CAN_TIMEOUT==-1){CAN_TIMEOUT = 10000;}
-  if(isnan(R_NOMINAL) || R_NOMINAL==-1){R_NOMINAL = 0.0f;}
-  // if(isnan(TEMP_MAX) || TEMP_MAX==-1){TEMP_MAX = 125.0f;}
-  if(isnan(I_MAX_CONT) || I_MAX_CONT==-1){I_MAX_CONT = 14.0f;}
-  if(isnan(I_CAL)||I_CAL==-1){I_CAL = 2.0f;}
-  I_CAL=5.0f;
-  if(isnan(PPAIRS) || PPAIRS==-1){PPAIRS = 21.0f;}
-  if(isnan(GR) || GR==-1){GR = 1.0f;}
-  if(isnan(KT) || KT==-1){KT = 1.0f;}
-  if(isnan(KP_MAX) || KP_MAX==-1){KP_MAX = 500.0f;}
-  if(isnan(KD_MAX) || KD_MAX==-1){KD_MAX = 5.0f;}
-  if(isnan(P_MAX)){P_MAX = 12.57f;}
-  if(isnan(P_MIN)){P_MIN = -12.57f;}
-  if(isnan(V_MAX)){V_MAX = 65.0f;}
-  if(isnan(V_MIN)){V_MIN = -65.0f;}
 
-  P_MAX = 1024.0f;
-  P_MIN = -1024.0f;
-  
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -150,94 +104,6 @@ int main(void)
   MX_TIM1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-
-  /* CAN setup */
-  can_rx_init(&can_rx);
-  can_tx_init(&can_tx);
-  HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
-  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
-
-  /* DRV8353 setup */
-  drv_init(drv, I_MAX);
-
-  /* FOC sensor init — must come before MA732 start so the LUT is active
-     from the very first SPI callback */
-  foc_sensor_init(&hfoc,
-      (CALIBRATION_DONE_FLAG == 1) ? E_ZERO_RAD        : 0.0f,
-      (CALIBRATION_DONE_FLAG == 1 && PHASE_ORDER == 1) ? REVERSE_DIR : NORMAL_DIR);
-  if (CALIBRATION_DONE_FLAG == 1) {
-    hfoc.angle_sensor.m_zero     = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
-    hfoc.angle_sensor.pole_pairs = (uint8_t)PPAIRS;
-    memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
-           sizeof(hfoc.angle_sensor.encd_error_comp));
-    hfoc.angle_sensor.lut_ready = 1;
-    printf("Encoder cal loaded: e_zero=%.4f, ppairs=%d, dir=%s\r\n",
-           hfoc.angle_sensor.e_zero, hfoc.angle_sensor.pole_pairs,
-           (hfoc.angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
-  }
-
-  /* MA732 setup */
-  MA732_config(&hfoc.angle_sensor.ma732, &ENC_SPI);
-  for (int i=0; i<20; i++) {
-    MA732_start(&hfoc.angle_sensor.ma732);
-    HAL_Delay(10);
-  }
-
-  /* Turn on PWM */
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-
-  // shift ADC trigger to occur slightly before the PWM edge to allow for sampling during the deadtime
-  htim1.Instance->CCR4 = htim1.Instance->ARR - ADC_TRIG_OFFSET;
-
-  foc_timer_init(&hfoc, &htim1);
-  foc_set_limit_current(&hfoc, 20.0f);
-  init_trig_lut();
-
-  pid_reset(&hfoc.id_ctrl);
-  pid_set_ts(&hfoc.id_ctrl, FOC_TS);
-  pid_set_kp(&hfoc.id_ctrl, 0.04f);
-  pid_set_ki(&hfoc.id_ctrl, 10.0f);
-  pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
-  pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
-
-
-  pid_reset(&hfoc.iq_ctrl);
-  pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
-  pid_set_kp(&hfoc.iq_ctrl, 0.04f);
-  pid_set_ki(&hfoc.iq_ctrl, 10.0f);
-  pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
-  pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
-
-  // Speed PID parameter
-  pid_reset(&hfoc.speed_ctrl);
-  pid_set_ts(&hfoc.speed_ctrl, SPEED_TS);
-  pid_set_kp(&hfoc.speed_ctrl, 0.01f);
-  pid_set_ki(&hfoc.speed_ctrl, 0.1f);
-  pid_set_kd(&hfoc.speed_ctrl, 0.0001f);
-  pid_set_d_filter_fc(&hfoc.speed_ctrl, 100.0f);
-  pid_set_max_d(&hfoc.speed_ctrl, 10.0f);
-  pid_set_max_out(&hfoc.speed_ctrl, 10.0f);
-  pid_set_deadband(&hfoc.speed_ctrl, 0.01f);
-
-  	// current sensor
-  hfsm.curr_state = MENU_MODE;
-  hfsm.next_state = MENU_MODE;
-  CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
-	HAL_ADCEx_InjectedStart_IT(&hadc1);
-	HAL_ADCEx_InjectedStart_IT(&hadc2);
-	HAL_ADCEx_InjectedStart_IT(&hadc3);
-  HAL_Delay(50);
-
-  drv_enable_gd(drv);
-  htim1.Instance->CCR1 = 0u;
-  htim1.Instance->CCR2 = 0u;
-  htim1.Instance->CCR3 = 0u;
-  CurrentSensor_calibrate(&hfoc.current_sensor, 1000U);
-  printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
-         hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset, hfoc.current_sensor.adc_c_offset);
 
   /* USER CODE END 2 */
 
@@ -315,43 +181,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-// CAN RX is now handled entirely in CAN1_RX0_IRQHandler (stm32f4xx_it.c).
-// Protocol: CAN_ID, 8 bytes.
-//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFC  → enter torque control (MOTOR_CMD)
-//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFD  → return to menu      (MENU_CMD)
-//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFE  → set mechanical zero  (ZERO_CMD)
-//   otherwise                                → MIT pos/vel/kp/kd command
-// Reply: 6 bytes, position/velocity/current packed as int16.
 
-void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
-{
-  if (hspi->Instance == ENC_SPI.Instance)
-  {
-    angle_sensor_update(&hfoc.angle_sensor);
-  }
-}
-
-void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
-{
-  if (hspi->Instance == ENC_SPI.Instance)
-  {
-    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
-  }
-}
-void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
-	if (hadc->Instance == ADC1) {
-  }
-	if (hadc->Instance == ADC2) {
-  }
-	if (hadc->Instance == ADC3) {
-    // Don't trigger anything on the callbacks for ADC1 and ADC2.
-    // We want to wait to do any work until we're sure we have info from
-    // all three ADCs.
-    CurrentSensor_sample_offset(&hfoc.current_sensor);
-    run_fsm(&hfsm);
-	}
-  
-}
 /* USER CODE END 4 */
 
 /**

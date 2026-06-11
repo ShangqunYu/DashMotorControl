@@ -33,24 +33,26 @@ MENU_MODE = 0
 MIT_MODE  = 5
 
 # ── Scaling ranges — must match flash-stored values on the motor ─────────────
-P_MIN   = -12.5     # rad
-P_MAX   =  12.5     # rad
-V_MIN   = -45.0     # rad/s
-V_MAX   =  45.0     # rad/s
+# P_MIN   = -12.5     # rad
+# P_MAX   =  12.5     # rad
+P_MAX = 1024.0
+P_MIN = -P_MAX
+V_MIN   = -65.0     # rad/s
+V_MAX   =  65.0     # rad/s
 KP_MAX  =  500.0    # N-m/rad
 KD_MAX  =  5.0      # N-m·s/rad
-T_MIN   = -18.0     # N-m
-T_MAX   =  18.0     # N-m
+T_MIN   = -40.0     # N-m
+T_MAX   =  40.0     # N-m
 
 # ── Sine trajectory parameters ────────────────────────────────────────────────
-AMPLITUDE   = 3.14  # rad   (peak displacement from zero)
+AMPLITUDE   = 0  # rad   (peak displacement from zero)
 FREQUENCY   = 2  # Hz
-UPDATE_HZ   = 200   # command rate
+UPDATE_HZ   = 50   # command rate
 CENTER      = 0.0   # rad   (center of sine wave)
 
 # ── Control gains ─────────────────────────────────────────────────────────────
-KP = 20.0   # N-m/rad
-KD = 0.5    # N-m·s/rad
+KP = 0   # N-m/rad
+KD = 0    # N-m·s/rad
 
 # ── Plot settings ─────────────────────────────────────────────────────────────
 PLOT_WINDOW_S    = 5   # seconds of history shown
@@ -126,12 +128,12 @@ class LivePlot:
 
         self._line_des, = self._ax.plot([], [], label="desired", color="tab:blue",   marker=".", markersize=4)
         self._line_act, = self._ax.plot([], [], label="actual",  color="tab:orange", marker=".", markersize=4)
-        self._ax.set_ylabel("position (rad)")
+        self._ax.set_ylabel("position (rotations)")
         self._ax.legend()
         self._ax.grid(True)
 
         self._line_vel, = self._ax_vel.plot([], [], color="tab:purple", marker=".", markersize=4)
-        self._ax_vel.set_ylabel("velocity (rad/s)")
+        self._ax_vel.set_ylabel("velocity (rotations/second)")
         self._ax_vel.grid(True)
 
         self._line_tor, = self._ax_tor.plot([], [], color="tab:red", marker=".", markersize=4)
@@ -197,11 +199,18 @@ def main():
             t = time.perf_counter() - t0
             des_pos = AMPLITUDE * math.sin(2 * math.pi * FREQUENCY * t) + CENTER
             des_vel = AMPLITUDE * 2 * math.pi * FREQUENCY * math.cos(2 * math.pi * FREQUENCY * t)
+            # overwrite
+            # des_pos = 0.0
+            # des_vel = 6.28
+            # KP = 0.0
+            # KD = 1.0
+            torque_ff = 0
             shared['des_pos'] = des_pos
+
             try:
                 bus.send(can.Message(
                     arbitration_id=CAN_ID,
-                    data=pack_cmd(des_pos, des_vel, KP, KD, 0.0),
+                    data=pack_cmd(des_pos, des_vel, KP, KD, torque_ff),
                     is_extended_id=True,
                 ), timeout=0.01)
             except Exception:
@@ -243,6 +252,10 @@ def main():
             for _ in range(20):
                 try:
                     t, des_pos, (pos, vel, torque, vbus, temp) = rx_queue.get_nowait()
+                    # convert from radians to rotations for ease of interpretation
+                    des_pos = des_pos / (2 * math.pi)
+                    pos = pos / (2 * math.pi)
+                    vel = vel / (2 * math.pi)
                 except queue.Empty:
                     break
                 plot.update(t, des_pos, pos, vel, torque)
@@ -251,7 +264,7 @@ def main():
                           f"vel={vel:+.3f}  τ={torque:+.3f}  "
                           f"vbus={vbus:.1f}V  temp={temp:.1f}C")
                     t_print = time.perf_counter()
-            plt.pause(0.02)  # 20 ms — enough for the Qt/Tk event loop to fire callbacks
+            plt.pause(0.002)  # 20 ms — enough for the Qt/Tk event loop to fire callbacks
 
     except KeyboardInterrupt:
         print("\nInterrupted.")
