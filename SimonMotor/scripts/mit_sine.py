@@ -41,18 +41,22 @@ V_MIN   = -65.0     # rad/s
 V_MAX   =  65.0     # rad/s
 KP_MAX  =  500.0    # N-m/rad
 KD_MAX  =  5.0      # N-m·s/rad
-T_MIN   = -40.0     # N-m
-T_MAX   =  40.0     # N-m
+GR = 18.0
+KT_AFTER_REDUCER = 2.97
+KT = 2.97/GR
+I_MAX = 40.0
+T_MIN   = -40.0 * GR * KT   # N-m
+T_MAX   =  40.0 * GR * KT   # N-m
 
 # ── Sine trajectory parameters ────────────────────────────────────────────────
-AMPLITUDE   = 0  # rad   (peak displacement from zero)
-FREQUENCY   = 1  # Hz
+AMPLITUDE   = 3.14/8.0 # rad   (peak displacement from zero)
+FREQUENCY   = 1.6 # Hz
 UPDATE_HZ   = 50   # command rate
 CENTER      = 0.0   # rad   (center of sine wave)
 
 # ── Control gains ─────────────────────────────────────────────────────────────
-KP = 0   # N-m/rad
-KD = 0    # N-m·s/rad
+KP = 30   # N-m/rad
+KD = 2.0    # N-m·s/rad
 
 # ── Plot settings ─────────────────────────────────────────────────────────────
 PLOT_WINDOW_S    = 5   # seconds of history shown
@@ -115,6 +119,7 @@ class LivePlot:
         self._t   = collections.deque(maxlen=maxlen)
         self._des = collections.deque(maxlen=maxlen)
         self._act = collections.deque(maxlen=maxlen)
+        self._des_vel = collections.deque(maxlen=maxlen)
         self._vel = collections.deque(maxlen=maxlen)
         self._tor = collections.deque(maxlen=maxlen)
         self._dt  = collections.deque(maxlen=maxlen)
@@ -132,8 +137,10 @@ class LivePlot:
         self._ax.legend()
         self._ax.grid(True)
 
-        self._line_vel, = self._ax_vel.plot([], [], color="tab:purple", marker=".", markersize=4)
+        self._line_des_vel, = self._ax_vel.plot([], [], label="desired", color="tab:blue",   marker=".", markersize=4)
+        self._line_vel,     = self._ax_vel.plot([], [], label="actual",  color="tab:purple", marker=".", markersize=4)
         self._ax_vel.set_ylabel("velocity (rotations/second)")
+        self._ax_vel.legend()
         self._ax_vel.grid(True)
 
         self._line_tor, = self._ax_tor.plot([], [], color="tab:red", marker=".", markersize=4)
@@ -152,14 +159,16 @@ class LivePlot:
         self._btn = Button(ax_btn, "Stop Motor")
         self._btn.on_clicked(lambda _: setattr(self, "running", False))
 
-    def update(self, t, des, pos, vel, torque):
+    def update(self, t, des, des_vel, pos, vel, torque):
         dt = t - self._t[-1] if self._t else 0.0
         self._t.append(t);   self._des.append(des); self._act.append(pos)
-        self._vel.append(vel); self._tor.append(torque); self._dt.append(dt)
+        self._des_vel.append(des_vel); self._vel.append(vel)
+        self._tor.append(torque); self._dt.append(dt)
         self._counter += 1
         if self._counter % PLOT_UPDATE_EVERY == 0:
             self._line_des.set_data(self._t, self._des)
             self._line_act.set_data(self._t, self._act)
+            self._line_des_vel.set_data(self._t, self._des_vel)
             self._line_vel.set_data(self._t, self._vel)
             self._line_tor.set_data(self._t, self._tor)
             self._line_dt.set_data(self._t, self._dt)
@@ -182,7 +191,7 @@ def main():
     stop     = threading.Event()
     rx_queue = queue.Queue()
     # Shared latest desired position — RX thread reads this to tag each reply
-    shared   = {'des_pos': 0.0}
+    shared   = {'des_pos': 0.0, 'des_vel': 0.0}
     interval = 1.0 / UPDATE_HZ
 
     # ── TX thread ────────────────────────────────────────────────────────────
@@ -191,21 +200,25 @@ def main():
         while not stop.is_set():
             now = time.perf_counter()
             gap = next_send - now
-            if gap > 5e-4:
-                time.sleep(gap - 4e-4)
-            while time.perf_counter() < next_send:
-                pass
+            if gap > 0:
+                time.sleep(gap)
+            elif gap < -interval:
+                # Fell more than one tick behind (e.g. GIL held by a slow
+                # matplotlib redraw) — resync instead of firing a burst of
+                # queued sends back-to-back.
+                next_send = now
 
             t = time.perf_counter() - t0
             des_pos = AMPLITUDE * math.sin(2 * math.pi * FREQUENCY * t) + CENTER
             des_vel = AMPLITUDE * 2 * math.pi * FREQUENCY * math.cos(2 * math.pi * FREQUENCY * t)
             # overwrite
-            des_pos = 0.0
-            des_vel = 6.28
-            KP = 0.0
-            KD = 1.0
-            torque_ff = 0
+            # des_pos = 0.0
+            # des_vel = 0.0
+            # KP = 0.0
+            # KD = 0.0
+            torque_ff = 0.0
             shared['des_pos'] = des_pos
+            shared['des_vel'] = des_vel
 
             try:
                 bus.send(can.Message(
@@ -227,7 +240,7 @@ def main():
             if msg is not None:
                 result = decode_reply(msg)
                 if result:
-                    rx_queue.put((time.perf_counter() - t0, shared['des_pos'], result))
+                    rx_queue.put((time.perf_counter() - t0, shared['des_pos'], shared['des_vel'], result))
 
     send_mode(bus, MIT_MODE)
     time.sleep(0.1)
@@ -251,14 +264,15 @@ def main():
             # and the Stop button callback never fires.
             for _ in range(20):
                 try:
-                    t, des_pos, (pos, vel, torque, vbus, temp) = rx_queue.get_nowait()
+                    t, des_pos, des_vel, (pos, vel, torque, vbus, temp) = rx_queue.get_nowait()
                     # convert from radians to rotations for ease of interpretation
                     des_pos = des_pos / (2 * math.pi)
+                    des_vel = des_vel / (2 * math.pi)
                     pos = pos / (2 * math.pi)
                     vel = vel / (2 * math.pi)
                 except queue.Empty:
                     break
-                plot.update(t, des_pos, pos, vel, torque)
+                plot.update(t, des_pos, des_vel, pos, vel, torque)
                 if time.perf_counter() - t_print >= 0.2:
                     print(f"t={t:6.2f}s  des={des_pos:+.3f}  pos={pos:+.3f}  "
                           f"vel={vel:+.3f}  τ={torque:+.3f}  "

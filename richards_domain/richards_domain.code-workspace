@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "STM32_CubeMX_Generated_Code"
+		},
+		{
+			"path": "Code_Written_By_Humans"
+		}
+	],
+	"settings": {
+		"stm32cube-ide-clangd.arguments": [
+			"starm-clangd",
+			"--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-gcc*",
+			"--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-g++*"
+		],
+		"stm32cube-ide-clangd.path": "cube",
+		"editor.foldingStrategy": "indentation"
+	}
+}

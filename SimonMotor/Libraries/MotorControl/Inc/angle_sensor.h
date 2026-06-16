@@ -38,11 +38,13 @@ typedef struct {
     float s_rotor_rad;       // user position single turn (LUT-corrected, relative to m_zero)
     float s_rotor_rad_raw;   // user position before LUT correction (same reference, for comparison)
     float multi_rotor_rad;   // multiturn mechanical angle (LUT-corrected, relative to m_zero)
+    float mech_angle_rad;     // mechanical agnle for the output shaft
     float e_zero;            // electrical zero (rad): encoder reading when e=0, from calibration
     float m_zero;            // mechanical zero (rad): user-defined position reference
     float e_rad;             // electric angle latched each FOC cycle
 
     float rotor_vel;    // rotor velocity (rad/s, direction-corrected)
+    float mech_angle_vel; // mechanical angular velocity after the gear ratio
     float pos_hat;      // observer: estimated position
     float vel_hat;      // observer: estimated velocity
     uint8_t obs_ready;  // 1 once observer has been initialised

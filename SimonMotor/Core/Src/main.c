@@ -71,6 +71,12 @@ CalStruct hcal;
 CANTxMessage can_tx;
 CANRxMessage can_rx;
 FSMStruct hfsm;
+
+/* FOC loop timing instrumentation (DWT cycle counter) */
+volatile uint32_t foc_loop_cycles_min = 0xFFFFFFFFu;
+volatile uint32_t foc_loop_cycles_max = 0;
+volatile uint32_t foc_loop_cycles_sum = 0;
+volatile uint32_t foc_loop_cycles_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -115,17 +121,19 @@ int main(void)
   // if(isnan(TEMP_MAX) || TEMP_MAX==-1){TEMP_MAX = 125.0f;}
   if(isnan(I_MAX_CONT) || I_MAX_CONT==-1){I_MAX_CONT = 14.0f;}
   if(isnan(I_CAL)||I_CAL==-1){I_CAL = 2.0f;}
-  I_CAL=5.0f;
+  I_CAL=10.0f;
   if(isnan(PPAIRS) || PPAIRS==-1){PPAIRS = 21.0f;}
   if(isnan(GR) || GR==-1){GR = 1.0f;}
+  GR = 18.0f;
   if(isnan(KT) || KT==-1){KT = 1.0f;}
+  float KT_AFTER_REDUCER = 2.97f;
+  KT = KT_AFTER_REDUCER/GR;
   if(isnan(KP_MAX) || KP_MAX==-1){KP_MAX = 500.0f;}
   if(isnan(KD_MAX) || KD_MAX==-1){KD_MAX = 5.0f;}
   if(isnan(P_MAX)){P_MAX = 12.57f;}
   if(isnan(P_MIN)){P_MIN = -12.57f;}
   if(isnan(V_MAX)){V_MAX = 65.0f;}
   if(isnan(V_MIN)){V_MIN = -65.0f;}
-
   
   /* USER CODE END Init */
 
@@ -133,6 +141,10 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  /* Enable DWT cycle counter for FOC-loop timing instrumentation */
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
 
   /* USER CODE END SysInit */
 
@@ -174,6 +186,10 @@ int main(void)
            (hfoc.angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
   }
 
+    // if using external encoder, set cs pin high for the internal one to disable it and avoid interference
+  if(USE_EXTERNAL_ENCODER){
+    HAL_GPIO_WritePin(ENC_CS_INT, GPIO_PIN_SET);
+  }
   /* MA732 setup */
   MA732_config(&hfoc.angle_sensor.ma732, &ENC_SPI);
   for (int i=0; i<20; i++) {
@@ -191,21 +207,21 @@ int main(void)
   htim1.Instance->CCR4 = htim1.Instance->ARR - ADC_TRIG_OFFSET;
 
   foc_timer_init(&hfoc, &htim1);
-  foc_set_limit_current(&hfoc, 20.0f);
+  foc_set_limit_current(&hfoc, I_MAX);
   init_trig_lut();
 
   pid_reset(&hfoc.id_ctrl);
   pid_set_ts(&hfoc.id_ctrl, FOC_TS);
-  pid_set_kp(&hfoc.id_ctrl, 0.04f);
-  pid_set_ki(&hfoc.id_ctrl, 80.0f);
+  pid_set_kp(&hfoc.id_ctrl, 0.05f);
+  pid_set_ki(&hfoc.id_ctrl, 200.0f);
   pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
   pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
 
 
   pid_reset(&hfoc.iq_ctrl);
   pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
-  pid_set_kp(&hfoc.iq_ctrl, 0.04f);
-  pid_set_ki(&hfoc.iq_ctrl, 80.0f);
+  pid_set_kp(&hfoc.iq_ctrl, 0.05f);
+  pid_set_ki(&hfoc.iq_ctrl, 200.0f);
   pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
   pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
 
@@ -346,7 +362,15 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
     // We want to wait to do any work until we're sure we have info from
     // all three ADCs.
     CurrentSensor_sample_offset(&hfoc.current_sensor);
+
+    uint32_t cyc_start = DWT->CYCCNT;
     run_fsm(&hfsm);
+    uint32_t cycles = DWT->CYCCNT - cyc_start;
+
+    if (cycles < foc_loop_cycles_min) foc_loop_cycles_min = cycles;
+    if (cycles > foc_loop_cycles_max) foc_loop_cycles_max = cycles;
+    foc_loop_cycles_sum += cycles;
+    foc_loop_cycles_count++;
 	}
   
 }

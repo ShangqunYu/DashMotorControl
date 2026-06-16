@@ -20,6 +20,8 @@ extern "C" {
 #define MENU_CMD    27    /* ESC – return to menu from any state */
 #define MOTOR_CMD   'm'   /* enter torque control mode */
 #define CAL_CMD     'c'   /* start encoder calibration */
+#define R_MEAS_CMD  'r'   /* measure winding resistance (Rs) */
+#define L_MEAS_CMD  'l'   /* measure winding inductance (Ld, Lq) */
 #define ENCODER_CMD 'e'   /* enter encoder display mode */
 #define SETUP_CMD   's'   /* enter setup / parameter config */
 #define ZERO_CMD    'z'   /* capture current position as mechanical zero */

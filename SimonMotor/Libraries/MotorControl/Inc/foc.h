@@ -27,6 +27,8 @@ typedef enum {
 	ENCODER_MODE,    // motor coast; prints raw vs LUT-compensated angle
 	SET_ZERO_MODE,   // capture current position as mechanical zero
 	SETUP_MODE,      // serial parameter configuration
+	R_MEAS_MODE,     // DC winding resistance measurement
+	L_MEAS_MODE,     // AC winding inductance measurement (Ld then Lq)
 } motor_state;
 
 typedef enum {
@@ -102,10 +104,22 @@ typedef struct {
 	MIT_CMD          mit_cmd;
 	volatile MIT_CMD mit_buf;
 	volatile uint8_t new_cmd;
+
+	/* ── R/L measurement ── */
+	float    meas_inj_amp;  // injection voltage (V)
+	uint32_t meas_inj_n;   // sample / cycle counter (written by ISR)
+	uint8_t  meas_done;    // set 1 by ISR when measurement complete
+
+	/* running DFT accumulators — reused for Ld then Lq */
+	float    l_meas_Vc, l_meas_Vs;  // voltage cosine / sine component
+	float    l_meas_Ic, l_meas_Is;  // current cosine / sine component
+	uint8_t  l_meas_phase;           // 0 = collecting Ld, 1 = collecting Lq
 } foc_t;
 
 void foc_zero_commands(foc_t *hfoc);
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
+void foc_r_meas_update(foc_t *hfoc);
+void foc_l_meas_update(foc_t *hfoc);
 void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);

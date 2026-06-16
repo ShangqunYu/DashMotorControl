@@ -149,7 +149,7 @@ void MX_ADC2_Init(void)
   sConfigInjected.InjectedChannel = ADC_CHANNEL_11;
   sConfigInjected.InjectedRank = 1;
   sConfigInjected.InjectedNbrOfConversion = 2;
-  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_15CYCLES;
+  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES;
   sConfigInjected.AutoInjectedConv = ENABLE;
   sConfigInjected.InjectedDiscontinuousConvMode = DISABLE;
   sConfigInjected.InjectedOffset = 0;
@@ -162,7 +162,6 @@ void MX_ADC2_Init(void)
   */
   sConfigInjected.InjectedChannel = ADC_CHANNEL_1;
   sConfigInjected.InjectedRank = 2;
-  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADCEx_InjectedConfigChannel(&hadc2, &sConfigInjected) != HAL_OK)
   {
     Error_Handler();
@@ -219,7 +218,7 @@ void MX_ADC3_Init(void)
   sConfigInjected.InjectedChannel = ADC_CHANNEL_10;
   sConfigInjected.InjectedRank = 1;
   sConfigInjected.InjectedNbrOfConversion = 2;
-  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES;
+  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_15CYCLES;
   sConfigInjected.AutoInjectedConv = ENABLE;
   sConfigInjected.InjectedDiscontinuousConvMode = DISABLE;
   sConfigInjected.InjectedOffset = 0;
@@ -232,6 +231,7 @@ void MX_ADC3_Init(void)
   */
   sConfigInjected.InjectedChannel = ADC_CHANNEL_0;
   sConfigInjected.InjectedRank = 2;
+  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADCEx_InjectedConfigChannel(&hadc3, &sConfigInjected) != HAL_OK)
   {
     Error_Handler();

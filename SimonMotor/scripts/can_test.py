@@ -29,6 +29,8 @@ MIT_MODE             = 5
 ENCODER_MODE         = 6
 SET_ZERO_MODE        = 7
 SETUP_MODE           = 8
+R_MEAS_MODE          = 9
+L_MEAS_MODE          = 10
 
 # Scaling ranges — must match flash-stored values on the motor
 # V_BUS and TEMP are hardcoded in hw_config.h; the rest are user-configurable
@@ -97,7 +99,7 @@ def main():
         sys.exit(f"Failed to open {CHANNEL}: {exc}")
 
     try:
-        send_mode(bus, CAN_ID, MENU_MODE)
+        send_mode(bus, CAN_ID, L_MEAS_MODE)
         receive_reply(bus)
     except Exception as exc:
         sys.exit(f"Error: {exc}")

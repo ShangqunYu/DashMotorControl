@@ -96,6 +96,25 @@ void run_fsm(FSMStruct *fsmstate)
             open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
             break;
 
+        case R_MEAS_MODE:
+            foc_r_meas_update(&hfoc);
+            if (hfoc.meas_done) {
+                hfoc.meas_done = 0;
+                printf("\r\nRs = %.4f Ohm\r\n", hfoc.Rs);
+                fsmstate->next_state = MENU_MODE;
+            }
+            break;
+
+        case L_MEAS_MODE:
+            foc_l_meas_update(&hfoc);
+            if (hfoc.meas_done) {
+                hfoc.meas_done = 0;
+                printf("\r\nLd = %.4f mH   Lq = %.4f mH\r\n",
+                       hfoc.Ld * 1000.0f, hfoc.Lq * 1000.0f);
+                fsmstate->next_state = MENU_MODE;
+            }
+            break;
+
         default:
             break;
     }
@@ -134,6 +153,30 @@ void fsm_enter_state(FSMStruct *fsmstate)
         case SET_ZERO_MODE:
             break;
 
+        case R_MEAS_MODE:
+            drv_enable_gd(drv);
+            HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
+            if (hfoc.meas_inj_amp <= 0.0f) { hfoc.meas_inj_amp = 1.0f; }
+            hfoc.meas_inj_n = 0;
+            hfoc.meas_done  = 0;
+            printf("\r\nStarting R measurement (Vd = %.2f V)...\r\n", hfoc.meas_inj_amp);
+            break;
+
+        case L_MEAS_MODE:
+            drv_enable_gd(drv);
+            HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
+            if (hfoc.meas_inj_amp <= 0.0f) { hfoc.meas_inj_amp = 1.0f; }
+            hfoc.meas_inj_n   = 0;
+            hfoc.meas_done    = 0;
+            hfoc.l_meas_Vc    = 0.0f;
+            hfoc.l_meas_Vs    = 0.0f;
+            hfoc.l_meas_Ic    = 0.0f;
+            hfoc.l_meas_Is    = 0.0f;
+            hfoc.l_meas_phase = 0;
+            printf("\r\nStarting L measurement (V = %.2f V, f = 1000 Hz)...\r\n",
+                   hfoc.meas_inj_amp);
+            break;
+
         default:
             break;
     }
@@ -150,6 +193,8 @@ void fsm_exit_state(FSMStruct *fsmstate)
         case POSITION_CONTROL_MODE:
         case MIT_MODE:
         case CALIBRATION_MODE:
+        case R_MEAS_MODE:
+        case L_MEAS_MODE:
             drv_disable_gd(drv);
             open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
             hfoc.id_ref = 0.0f;
@@ -194,6 +239,12 @@ void update_fsm(FSMStruct *fsmstate, char fsm_input)
                 case SETUP_CMD:
                     fsmstate->next_state = SETUP_MODE;
                     break;
+                case R_MEAS_CMD:
+                    fsmstate->next_state = R_MEAS_MODE;
+                    break;
+                case L_MEAS_CMD:
+                    fsmstate->next_state = L_MEAS_MODE;
+                    break;
                 case ZERO_CMD:
                     angle_sensor_set_m_zero(&hfoc.angle_sensor);
                     M_ZERO_RAD = hfoc.angle_sensor.m_zero;
@@ -234,6 +285,8 @@ void enter_menu_state(void)
     printf(" Commands:\r\n");
     printf(" m - Motor Mode (torque control)\r\n");
     printf(" c - Calibrate Encoder\r\n");
+    printf(" r - Measure Resistance (Rs)\r\n");
+    printf(" l - Measure Inductance (Ld, Lq)\r\n");
     printf(" s - Setup\r\n");
     printf(" e - Display Encoder\r\n");
     printf(" z - Set Zero Position\r\n");

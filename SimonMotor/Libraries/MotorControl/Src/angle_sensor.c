@@ -5,6 +5,7 @@
 #include "angle_sensor.h"
 #include "FOC_math.h"
 #include "math_ops.h"
+#include "user_config.h"
 #include <string.h>   /* memcpy */
 #include <math.h>     /* floorf, fabsf */
 
@@ -83,16 +84,13 @@ void angle_sensor_update(AngleSensor_t *sensor)
     uint8_t is_first = !sensor->first_sample;
     if (is_first) {
         sensor->first_sample = 1;
-        sensor->turns = 0;
-        if (sensor->s_rotor_rad > PI_OVER_2_F) {
-            sensor->turns = -1;
-        } else if (sensor->s_rotor_rad < -PI_OVER_2_F) {
-            sensor->turns = 1;
-        }
-    } 
+        sensor->turns = (sensor->s_rotor_rad > PI) ? -1 : 0;
+    }
     sensor->multi_rotor_rad = sensor->s_rotor_rad + TWO_PI * (float)sensor->turns;
     if (sensor->sensor_dir == REVERSE_DIR)
         sensor->multi_rotor_rad = -sensor->multi_rotor_rad;
+
+    sensor->mech_angle_rad = sensor->multi_rotor_rad / GR;
 
     // Electrical angle (from e_zero, not m_zero — FOC must stay anchored to e_zero)
     float e_rad = angle_from_ezero * (float)sensor->pole_pairs;
@@ -140,4 +138,5 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
         vel = 0.0f;
 
     sensor->rotor_vel = vel;
+    sensor->mech_angle_vel = vel / GR;
 }

@@ -25,7 +25,18 @@
 
 /* SPI encoder */
 #define ENC_SPI			hspi3				// Encoder SPI handle
-#define ENC_CS			GPIOA, GPIO_PIN_15	// Encoder SPI CS pin
+
+#define USE_EXTERNAL_ENCODER 1		// Set to 1 to use external SPI encoder, 0 to use internal SPI encoder (on same SPI bus as DRV)
+#define ENC_CS_INT			GPIOA, GPIO_PIN_15	// Encoder SPI CS pin
+#define ENC_CS_EXT			GPIOD, GPIO_PIN_2	// External Encoder SPI CS pin
+
+#if USE_EXTERNAL_ENCODER
+#define ENC_CS				ENC_CS_EXT
+#else
+#define ENC_CS				ENC_CS_INT
+#endif
+
+
 #define ENC_CPR			65536				// Encoder counts per revolution
 #define INV_CPR			1.0f/ENC_CPR
 #define ENC_READ_WORD	0x0000				// Encoder read command
@@ -81,8 +92,17 @@
 #define ERROR_LUT_SIZE      128U    // encoder nonlinearity correction LUT entries
 #define PPAIRS_MAX          64U     // max supported pole pairs (sizes calibration buffer)
 
-#define CURRENT_FILTER_ALPHA 0.466512f
+#define CURRENT_NOISE_CUTOFF_HZ 5000.0f
+
+#define CURRENT_SENSE_TIME_CONST 1.0f / (2.0f * 3.14159265f * CURRENT_NOISE_CUTOFF_HZ) // time constant for first-order low-pass filter on current measurements
+
+
+#define CURRENT_FILTER_ALPHA (CURRENT_SENSE_TIME_CONST / (CURRENT_SENSE_TIME_CONST + FOC_TS))
+
+//0.466512f
 
 #define CAL_ITERATION 100
+
+#define MIN_TORQUE_AT_OUTPUT_TO_OVERCOME_STATIC_FRICTION 2.75f
 
 #endif /* INC_HW_CONFIG_H_ */

@@ -57,6 +57,12 @@ extern CalStruct   hcal;
 extern FSMStruct   hfsm;
 extern PreferenceWriter prefs;
 
+/* FOC loop timing instrumentation (set in HAL_ADCEx_InjectedConvCpltCallback) */
+extern volatile uint32_t foc_loop_cycles_min;
+extern volatile uint32_t foc_loop_cycles_max;
+extern volatile uint32_t foc_loop_cycles_sum;
+extern volatile uint32_t foc_loop_cycles_count;
+
 static osSemaphoreId_t flash_write_sem;
 /* USER CODE END Variables */
 /* Definitions for motorMgrTask */
@@ -137,9 +143,28 @@ void MX_FREERTOS_Init(void) {
 void startMotorMgrTask(void *argument)
 {
   /* USER CODE BEGIN startMotorMgrTask */
+  uint32_t timing_report_counter = 0;
   for (;;)
   {
     osDelay(10);
+
+    /* Print FOC-loop (run_fsm) timing stats once per second, then reset */
+    if (++timing_report_counter >= 100) {
+      timing_report_counter = 0;
+      uint32_t cnt = foc_loop_cycles_count;
+      if (cnt > 0) {
+        float us_per_cycle = 1.0e6f / (float)SystemCoreClock;
+        printf("FOC loop: min=%.2fus max=%.2fus avg=%.2fus (n=%lu)\r\n",
+               foc_loop_cycles_min * us_per_cycle,
+               foc_loop_cycles_max * us_per_cycle,
+               (foc_loop_cycles_sum / (float)cnt) * us_per_cycle,
+               (unsigned long)cnt);
+        foc_loop_cycles_min   = 0xFFFFFFFFu;
+        foc_loop_cycles_max   = 0;
+        foc_loop_cycles_sum   = 0;
+        foc_loop_cycles_count = 0;
+      }
+    }
 
     if (hfsm.curr_state == SET_ZERO_MODE) {
       angle_sensor_set_m_zero(&hfoc.angle_sensor);

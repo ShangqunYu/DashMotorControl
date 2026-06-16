@@ -234,7 +234,7 @@ void CAN1_RX0_IRQHandler(void)
   HAL_CAN_GetRxMessage(&CAN_H, CAN_RX_FIFO0, &can_rx.rx_header, can_rx.data);
 
   /* Send reply: can_id, position (rad), velocity (rad/s), estimated torque (N-m), vbus (V), motor temp (C) */
-  pack_reply(&can_tx, CAN_ID, hfoc.angle_sensor.multi_rotor_rad/GR, hfoc.angle_sensor.rotor_vel/GR, hfoc.iq*KT*GR, hfoc.v_bus, hfoc.motor_temp);
+  pack_reply(&can_tx, CAN_ID, hfoc.angle_sensor.mech_angle_rad, hfoc.angle_sensor.mech_angle_vel, hfoc.iq*KT*GR, hfoc.v_bus, hfoc.motor_temp);
   uint32_t tx_mailbox;
   HAL_CAN_AddTxMessage(&CAN_H, &can_tx.tx_header, can_tx.data, &tx_mailbox);
 
@@ -248,6 +248,8 @@ void CAN1_RX0_IRQHandler(void)
       case SET_ZERO_MODE: update_fsm(&hfsm, ZERO_CMD);  break;  /* set mechanical zero */
       case CALIBRATION_MODE: update_fsm(&hfsm, CAL_CMD); break;  /* enter calibration mode */
       case ENCODER_MODE: update_fsm(&hfsm, ENCODER_CMD); break;  /* enter encoder display mode */
+      case R_MEAS_MODE: update_fsm(&hfsm, R_MEAS_CMD); break;  /* enter R measurement mode */
+      case L_MEAS_MODE: update_fsm(&hfsm, L_MEAS_CMD); break;  /* enter L measurement mode */
       default:   break;
     }
     return;
