@@ -39,6 +39,10 @@ void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc) {
 
 void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w) {
     uint32_t res = hfoc->pwm_resolution;
+    // invert duty cycle because if you want current to flow, you need to drive low (sink current) not high (source current)
+    dtc_u = 1.0f - dtc_u;
+    dtc_v = 1.0f - dtc_v;
+    dtc_w = 1.0f - dtc_w;
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, (uint32_t)(dtc_u * res));
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, (uint32_t)(dtc_v * res));
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, (uint32_t)(dtc_w * res));
@@ -94,19 +98,26 @@ void foc_update_velocity(foc_t *hfoc, float Ts) {
 }
 
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad) {
-    uint32_t da, db, dc;
-    float sin_theta, cos_theta;
-    pre_calc_sin_cos(angle_rad, &sin_theta, &cos_theta);
-    inverse_park_transform(vd_ref, vq_ref, sin_theta, cos_theta, &hfoc->v_alpha, &hfoc->v_beta);
-    svpwm(hfoc->v_alpha, hfoc->v_beta, hfoc->v_bus, hfoc->pwm_resolution, &da, &db, &dc);
-    foc_set_pwm(hfoc, da, db, dc);
+    // uint32_t da, db, dc;
+    // float sin_theta, cos_theta;
+    // pre_calc_sin_cos(angle_rad, &sin_theta, &cos_theta);
+    // inverse_park_transform(vd_ref, vq_ref, sin_theta, cos_theta, &hfoc->v_alpha, &hfoc->v_beta);
+    // svpwm(hfoc->v_alpha, hfoc->v_beta, hfoc->v_bus, hfoc->pwm_resolution, &da, &db, &dc);
+    // foc_set_pwm(hfoc, da, db, dc);
+
+    float va, vb, vc;
+    float dtc_u, dtc_v, dtc_w;
+    abc(angle_rad, vd_ref, vq_ref, &va, &vb, &vc);
+    svm(hfoc->v_bus, va, vb, vc, &dtc_u, &dtc_v, &dtc_w);
+    foc_set_pwm_dtc(hfoc, dtc_u, dtc_v, dtc_w);    
+
 }
 
 /* ── R measurement ───────────────────────────────────────────────────────────
  * Applies a fixed Vd at θ = 0, waits for steady state, then averages Id.
  * Rs = Vd / mean(Id).  Total time: (WARMUP + SAMPLES) / 40000 Hz ≈ 25 ms.
  */
-#define R_MEAS_WARMUP   500u   // cycles for L*dI/dt transient to die out
+#define R_MEAS_WARMUP   5000u   // cycles for L*dI/dt transient to die out
 #define R_MEAS_SAMPLES  500u   // averaging window
 
 static float r_meas_id_buf[R_MEAS_SAMPLES];
@@ -235,8 +246,8 @@ void foc_l_meas_update(foc_t *hfoc)
         hfoc->l_meas_Ic = hfoc->l_meas_Is = 0.0f;
         hfoc->meas_inj_n = L_MEAS_ALIGN;   /* jump past alignment phase */
 
-        if (hfoc->l_meas_phase == 0) {
-            hfoc->l_meas_phase = 1;   /* proceed to Lq */
+        if (hfoc->l_meas_phase == 1) {
+            hfoc->l_meas_phase = 0;   /* proceed to Lq */
         } else {
             hfoc->meas_done = 1;      /* both Ld and Lq done */
         }

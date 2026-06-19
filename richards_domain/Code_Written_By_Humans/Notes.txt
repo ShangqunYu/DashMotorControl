@@ -1,0 +1,4 @@
+I had to explicitly add the folder with my c++ files to the CMakeLists.txt
+in order to get it to include those files in the build process.
+
+I also had to include MainProMax.cpp as a 'source', as opposed to a header.

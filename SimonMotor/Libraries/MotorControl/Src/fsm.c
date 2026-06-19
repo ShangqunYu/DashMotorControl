@@ -157,6 +157,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
             drv_enable_gd(drv);
             HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
             if (hfoc.meas_inj_amp <= 0.0f) { hfoc.meas_inj_amp = 1.0f; }
+            hfoc.meas_inj_amp = 3.0f;
             hfoc.meas_inj_n = 0;
             hfoc.meas_done  = 0;
             printf("\r\nStarting R measurement (Vd = %.2f V)...\r\n", hfoc.meas_inj_amp);
@@ -172,7 +173,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
             hfoc.l_meas_Vs    = 0.0f;
             hfoc.l_meas_Ic    = 0.0f;
             hfoc.l_meas_Is    = 0.0f;
-            hfoc.l_meas_phase = 0;
+            hfoc.l_meas_phase = 1;
             printf("\r\nStarting L measurement (V = %.2f V, f = 1000 Hz)...\r\n",
                    hfoc.meas_inj_amp);
             break;
