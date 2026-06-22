@@ -14,6 +14,8 @@
 
 
 class CanBus {
+    // TODO: MOVE GENERAL DOCS ABOUT WORKFLOW AND WHERE TO FIND INFO TO MAIN_PRO_MAX.HPP!!!!!!!
+    //
     // The API for controlling CAN Bus communication is "documented" in the file
     // STM32_CubeMX_Generated_Code/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c
     //
@@ -139,7 +141,9 @@ class CanBus {
     // so that's what I'll do here too.
 
     private:
-        uint32_t myCanId = 1;
+        uint32_t myCanId = 3;
+        bool using11BitCanId = true;
+        bool using29BitCanID = !using11BitCanId;
     
     public:
         // public shit goes here, including constructors?
@@ -176,6 +180,8 @@ class CanBus {
             // Update: Looks good so far, I've changed the import!
             CAN_HandleTypeDef* pointerToCanStuff = &hcan1; // <- lives in "can.c", provided to us by "can.h"
             
+
+
             // Actual filter params we can just pass in ourselves.
             // The options are defined in "stm32f4xx_hal_can.h";
             // The actual meaning of these options is defined in the
@@ -211,6 +217,8 @@ class CanBus {
             //                                    is set to '1'. I put an 'X' in the [bit pattern] everywhere the [mask] had a '0' to indicate
             //                                    that we could've used either a '0' or a '1' at that location in the [bit pattern], and it wouldnt've
             //                                    made a difference because of the [mask].)
+            // [bit pattern] = X X X X X X X 1
+            // [mask] =        0 0 0 0 0 0 0 1 TODO: add example.
             //
             //
             // https://electronics.stackexchange.com/questions/506180/can-bus-dominant-and-recessive
@@ -238,21 +246,53 @@ class CanBus {
             // 
             CAN_FilterTypeDef filterSettings;
 
+            // TODO: comments explaining the stupid alternate modes they provide?
             filterSettings.FilterMode = CAN_FILTERMODE_IDMASK;
             filterSettings.FilterScale = CAN_FILTERSCALE_32BIT;
 
-            filterSettings.FilterBank = 0; // TODO: loop over all banks and explicitly disable unused banks, or check if that's already done in the datasheet.
+            // Page 1056 of the Reference Manual (where they discuss the CAN_FA1R register),
+            // confirms that all filters are turned off by default upon startup,
+            // so we don't have to go through and explicitly make sure that every other filter
+            // is disabled.
+            filterSettings.FilterBank = 0;
             filterSettings.FilterActivation = CAN_FILTER_ENABLE;
             filterSettings.FilterFIFOAssignment = CAN_FILTER_FIFO0; // TODO: check this
             filterSettings.SlaveStartFilterBank = 0; // unused
 
-            // TODO: actually put the bits in the correct place per the diagram above,
-            //       and also account for the extra 2 bits at the end and make sure the final bit is 0...
-            filterSettings.FilterIdLow = myCanId & Utils::getBitMask(0, 16);
-            filterSettings.FilterIdHigh = (myCanId & Utils::getBitMask(16, 32)) >> 16;
+            // We build up the the [bit pattern] register by shifting
+            // in data from the right. We start with our 11 bit ID,
+            // followed by the 18 unused bits for the extended ID,
+            // then the two single bit flags [B] and [R] as described above,
+            // and then the final trailing 0 bit.
+            uint32_t bitPattern = 0;
+            if (using11BitCanId) {
+                bitPattern = (bitPattern << 11) | myCanId;
+                bitPattern = (bitPattern << 18) | uint32_t(0);
+                bitPattern = (bitPattern << 1)  | uint32_t(0); // flag for ID length
+                bitPattern = (bitPattern << 1)  | uint32_t(0); // flag for 'request frames'
+                bitPattern = (bitPattern << 1)  | uint32_t(0); // the required trailing 0.
+            }
+            else if (using29BitCanID) {
+                bitPattern = (bitPattern << 29) | myCanId; //                               (msb at 28)
+                bitPattern = (bitPattern << 1)  | uint32_t(1); // flag for ID length        (msb at 29)
+                bitPattern = (bitPattern << 1)  | uint32_t(0); // flag for 'request frames' (msb at 30)
+                bitPattern = (bitPattern << 1)  | uint32_t(0); // the required trailing 0.  (msb at 31, checks out!)
+            }
 
-            filterSettings.FilterMaskIdLow = Utils::getBitMask(0, 16);
-            filterSettings.FilterMaskIdHigh = Utils::getBitMask(0, 16);
+            // Set to mask to all 1's, we require everything to match.
+            uint32_t mask = Utils::getBitMask(0, 32);
+
+            // Split each 32 bit register into 2 16 bit registers, because that's the way their API
+            // accepts the register values for some reason...
+            filterSettings.FilterIdLow = bitPattern & Utils::getBitMask(0, 16);
+            filterSettings.FilterIdHigh = (bitPattern & Utils::getBitMask(16, 32)) >> uint32_t(16);
+            //                                                                      ^ we should get unsigned-right-shift here
+            //                                                                        because both inputs are unsigned types.
+
+            filterSettings.FilterMaskIdLow = mask & Utils::getBitMask(0, 16);
+            filterSettings.FilterMaskIdHigh = (mask & Utils::getBitMask(16, 32)) >> uint32_t(16);
+            //                                                                      ^ we should get unsigned-right-shift here
+            //                                                                        because both inputs are unsigned types.
 
             // lol
             // https://community.st.com/stm32-mcus-products-25/time-triggered-can-communication-support-70636

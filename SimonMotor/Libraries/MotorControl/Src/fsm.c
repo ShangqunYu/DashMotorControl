@@ -34,6 +34,7 @@ void run_fsm(FSMStruct *fsmstate)
 {
     /* 1. Per-cycle pre-processing ----------------------------------------- */
     hfoc.v_bus = get_power_voltage();
+    hfoc.motor_temp = get_temperature();
     foc_update_velocity(&hfoc, FOC_TS);
 
     /* 2. Apply pending MIT parameters (not a mode change) ----------------- */

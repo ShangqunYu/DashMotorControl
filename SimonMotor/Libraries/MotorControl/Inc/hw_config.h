@@ -49,7 +49,13 @@
 
 /* Other hardware-related constants */
 #define I_SCALE 			0.0201416f * 2  // Amps per A/D Count at 40X amplifier gain
-#define V_SCALE 			0.0169189f    // Bus volts per A/D Count
+#define V_SCALE 			0.0169189f    // Bus volts per A/D Count, the V_SCALE is calculated based on 0.0128906 = 3.3 × 16 ÷ 4096
+#define BASE_RESISTOR       10000.0f      //Resistor that is in series with the thermistor for temperature measurement
+#define THERMISTOR_NOMINAL  550.0f      // Nominal resistance of the thermistor at 25 degrees C
+#define THERMISTOR_160C     1400.0f      // Resistance of the thermistor at 160 degrees C (for beta calculation)
+#define OHM_PER_DEGREE_C    ((THERMISTOR_160C - THERMISTOR_NOMINAL) / (160.0f - 25.0f)) // Resistance change per degree C, calculated from the two known points (25C and 160C)
+
+
 #define DTC_MAX 			0.94f          	// Max duty cycle
 #define DTC_MIN 			0.0f          	// Min duty cycle
 #define DTC_COMP 			0.000f          // deadtime compensation (100 ns / 25 us)

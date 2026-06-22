@@ -87,3 +87,18 @@ float get_power_voltage(void) {
     pv_filtered = (1.0f - filter_alpha) * pv_filtered + filter_alpha * pv;
     return pv_filtered;
 }
+
+float get_temperature(void) {
+    static float temp_filtered = 25.0f;
+    const float filter_alpha = 0.1f;
+
+    // Voltage divider assumed: VCC → BASE_RESISTOR → ADC_pin → thermistor → GND
+    // If wired the other way, swap to: BASE_RESISTOR * (4095.0f - adc_raw) / adc_raw
+    float adc_raw = (float)ADC3->JDR2;
+    float r_therm = BASE_RESISTOR * (4095.0f - adc_raw) / adc_raw  ;
+
+    float temp = 25.0f + (r_therm - THERMISTOR_NOMINAL) / OHM_PER_DEGREE_C;
+
+    temp_filtered = (1.0f - filter_alpha) * temp_filtered + filter_alpha * temp;
+    return temp_filtered;
+}

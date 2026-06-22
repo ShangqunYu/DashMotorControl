@@ -6,15 +6,20 @@ waiting for a reply.  RTT is computed by matching TX and RX timestamps in
 order (valid because CAN is a single bus and the motor replies in order).
 
 Usage:
-    python3 can_bench.py [channel] [can_id] [duration_s] [target_hz]
+    python3 can_bench.py [channel] [can_id] [duration_s] [target_hz] [sine_amp]
+
+Arguments:
+    sine_amp  Peak position amplitude in rad for a 1.6 Hz sine command.
+              0 (default) sends a fixed hold-zero command.
 
 Examples:
-    python3 can_bench.py                     # can0  id=1  5 s  unlimited
-    python3 can_bench.py can0 1 5 1000       # cap TX at 1000 Hz
-    python3 can_bench.py can0 1 10           # 10-second unlimited run
+    python3 can_bench.py                       # can0  id=1  5 s  500 Hz  fixed
+    python3 can_bench.py can0 1 5 500          # fixed command at 500 Hz
+    python3 can_bench.py can0 1 5 500 0.39     # sine wave at 500 Hz
 """
 
 import sys
+import math
 import time
 import statistics
 import threading
@@ -23,8 +28,10 @@ import can
 
 CHANNEL   = sys.argv[1]         if len(sys.argv) > 1 else "can0"
 CAN_ID    = int(sys.argv[2])    if len(sys.argv) > 2 else 1
-DURATION  = float(sys.argv[3])  if len(sys.argv) > 3 else 5.0
-TARGET_HZ = float(sys.argv[4])  if len(sys.argv) > 4 else 500.0   # 0 = unlimited
+DURATION  = float(sys.argv[3])  if len(sys.argv) > 3 else 10.0
+TARGET_HZ = float(sys.argv[4])  if len(sys.argv) > 4 else 200.0   # 0 = unlimited
+SINE_AMP  = float(sys.argv[5])  if len(sys.argv) > 5 else 0.0     # 0 = fixed command
+SINE_HZ   = 1.0
 
 MENU_MODE = 0
 MIT_MODE  = 5
@@ -34,6 +41,8 @@ V_MIN, V_MAX = -45.0,  45.0
 KP_MAX       =  500.0
 KD_MAX       =  5.0
 T_MIN, T_MAX = -18.0,  18.0
+kp = 40.0
+kd = 0.5
 
 
 def float_to_uint(x, x_min, x_max, bits):
@@ -95,7 +104,16 @@ def main():
                     time.sleep(gap - 4e-4)
                 while time.perf_counter() < next_send:  # busy-wait the last ~0.4 ms
                     pass
-            t = time.perf_counter()
+            if SINE_AMP > 0:
+                elapsed = time.perf_counter() - t_start
+                pos = SINE_AMP * math.sin(2 * math.pi * SINE_HZ * elapsed)
+                vel = SINE_AMP * 2 * math.pi * SINE_HZ * math.cos(2 * math.pi * SINE_HZ * elapsed)
+                msg = can.Message(
+                    arbitration_id=CAN_ID,
+                    data=pack_cmd(pos, vel, kp, kd, 0.0),
+                    is_extended_id=True,
+                )
+            t = time.perf_counter()  # stamp right before send, not before sine math
             try:
                 bus.send(msg, timeout=0.01)
                 with lock:
@@ -122,7 +140,8 @@ def main():
     threading.Thread(target=rx_loop, daemon=True).start()
 
     rate_str = "unlimited" if TARGET_HZ == 0 else f"{TARGET_HZ:.0f} Hz"
-    print(f"Benchmarking for {DURATION:.0f} s  (target: {rate_str}) ...")
+    cmd_str  = f"sine {SINE_AMP:.3f} rad @ {SINE_HZ} Hz" if SINE_AMP > 0 else "fixed (hold zero)"
+    print(f"Benchmarking for {DURATION:.0f} s  (target: {rate_str},  cmd: {cmd_str}) ...")
     print()
 
     try:
@@ -169,16 +188,6 @@ def main():
             rtts.append((rx_list[rx_idx] - t_s) * 1_000)
             rx_idx += 1
 
-    # RTT histogram buckets (ms)
-    buckets = [0.5, 1.0, 1.5, 2.0, 3.0, 5.0, float("inf")]
-    labels  = ["<0.5", "0.5-1", "1-1.5", "1.5-2", "2-3", "3-5", ">5"]
-    counts  = [0] * len(buckets)
-    for r in rtts:
-        for i, edge in enumerate(buckets):
-            if r < edge:
-                counts[i] += 1
-                break
-
     print()
     print("=" * 54)
     print(f"  Duration       : {elapsed:.2f} s")
@@ -198,10 +207,26 @@ def main():
         print(f"  RTT max        : {max(rtts):.3f} ms")
         print(f"  RTT stdev      : {statistics.stdev(rtts):.3f} ms")
         print()
+        # Auto-scale histogram step to fit [0, max_rtt] in 7 buckets.
+        # Step is rounded up to the nearest 1-2-5 * 10^n for clean labels.
+        raw_step = max(rtts) / 7
+        exp = 10 ** math.floor(math.log10(raw_step))
+        step = next(s * exp for s in (1, 2, 5, 10) if s * exp >= raw_step)
+        edges  = [step * i for i in range(1, 8)] + [float("inf")]
+        labels = [f"<{step:.4g}"] + \
+                 [f"{step*i:.4g}-{step*(i+1):.4g}" for i in range(1, 7)] + \
+                 [f">{step*7:.4g}"]
+        counts = [0] * 8
+        for r in rtts:
+            for i, edge in enumerate(edges):
+                if r < edge:
+                    counts[i] += 1
+                    break
+        lw = max(len(l) for l in labels)
         print("  RTT histogram (ms):")
         for label, cnt in zip(labels, counts):
-            bar = "█" * (cnt * 30 // max(counts, default=1))
-            print(f"    {label:>7}  {bar:<30}  {cnt}")
+            bar = "█" * (cnt * 30 // (max(counts) or 1))
+            print(f"    {label:>{lw}}  {bar:<30}  {cnt}")
     print("=" * 54)
 
 

@@ -46,4 +46,6 @@ void CurrentSensor_calibrate(CurrentSensor *sensor, uint32_t duration_ms);
 
 float get_power_voltage(void);
 
+float get_temperature(void);
+
 #endif /* INC_ANALOG_SENSOR_H_ */
