@@ -58,7 +58,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
     if (hcal->cal_state == CAL_STATE_PHASE_SETTLING) {
         cal_force_current(hfoc, 0.0f, Ts);
         if (HAL_GetTick() - hcal->cal_start_time >= 1000) {
-            hcal->phase_raw_start = hfoc->angle_sensor.ma732.angle_filtered;
+            hcal->phase_raw_start = hfoc->angle_sensor.ma732.angle_raw;
             hcal->lut_theta_ref   = 0.0f;
             hcal->cal_state       = CAL_STATE_PHASE_DETECT;
         }
@@ -83,7 +83,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
         cal_force_current(hfoc, TWO_PI, Ts);
 
         if (HAL_GetTick() - hcal->cal_start_time >= 500) {
-            float raw_end = hfoc->angle_sensor.ma732.angle_filtered;
+            float raw_end = hfoc->angle_sensor.ma732.angle_raw;
             float delta   = raw_end - hcal->phase_raw_start;
             while (delta >  PI) delta -= TWO_PI;
             while (delta < -PI) delta += TWO_PI;
@@ -142,7 +142,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
         if (hcal->lut_theta_ref >= hcal->lut_next_sample_e_rad) {
             uint16_t idx = hcal->lut_cal_idx;
             float ideal  = (float)idx * TWO_PI / (float)hcal->lut_num_samples;
-            float err    = hfoc->angle_sensor.ma732.angle_filtered - ideal;
+            float err    = hfoc->angle_sensor.ma732.angle_raw - ideal;
             while (err >  PI) err -= TWO_PI;
             while (err < -PI) err += TWO_PI;
             hcal->lut_raw[idx] = err;
@@ -167,7 +167,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
         if (hcal->lut_theta_ref <= hcal->lut_next_sample_e_rad) {
             uint16_t idx = hcal->lut_cal_idx;
             float ideal  = (float)idx * TWO_PI / (float)hcal->lut_num_samples;
-            float err    = hfoc->angle_sensor.ma732.angle_filtered - ideal;
+            float err    = hfoc->angle_sensor.ma732.angle_raw - ideal;
             while (err >  PI) err -= TWO_PI;
             while (err < -PI) err += TWO_PI;
             hcal->lut_raw[idx] = (hcal->lut_raw[idx] + err) * 0.5f;

@@ -14,9 +14,6 @@
 #include "stm32f4xx_hal.h"
 
 
-#define ANGLE_FILTER_ALPHA    0.71539f  //0.71539f //   // Faktor filter
-#define MAX_ANGLE_JUMP_RAD    0.87266f  // 50 degrees in radians
-#define SPIKE_REJECT_COUNT    10       // Jumlah sampel untuk konfirmasi spike
 
 // Configurations (tune these based on your system)
 #define MIN_DT_US             500UL      // Minimum 1ms interval for valid RPM (avoid division by tiny numbers)
@@ -37,12 +34,8 @@
 typedef struct {
     SPI_HandleTypeDef *MA732_spi;
     uint8_t spi_rx_buffer[2];
+    float angle_raw;
     
-    float angle_filtered;
-    float prev_angle_filtered;
-    float prev_raw_angle;
-    uint8_t spike_counter;
-    uint8_t first_read;
     
     float prev_angle;
     float filtered_rpm;
@@ -63,7 +56,7 @@ typedef struct {
 #define MA732_reset_val_flag() (encd_get_val_flag = 0)
 
 
-extern _Bool encd_get_val_flag;
+extern volatile _Bool encd_get_val_flag;
 
 int MA732_config(MA732_t *encd, SPI_HandleTypeDef *hspi);
 int MA732_start(MA732_t *encd);

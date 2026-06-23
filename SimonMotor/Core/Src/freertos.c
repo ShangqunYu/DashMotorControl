@@ -63,6 +63,12 @@ extern volatile uint32_t foc_loop_cycles_max;
 extern volatile uint32_t foc_loop_cycles_sum;
 extern volatile uint32_t foc_loop_cycles_count;
 
+/* angle_sensor_update timing instrumentation (set in HAL_SPI_TxRxCpltCallback) */
+extern volatile uint32_t angle_sensor_cycles_min;
+extern volatile uint32_t angle_sensor_cycles_max;
+extern volatile uint32_t angle_sensor_cycles_sum;
+extern volatile uint32_t angle_sensor_cycles_count;
+
 static osSemaphoreId_t flash_write_sem;
 /* USER CODE END Variables */
 /* Definitions for motorMgrTask */
@@ -151,10 +157,10 @@ void startMotorMgrTask(void *argument)
     /* Print FOC-loop (run_fsm) timing stats once per second, then reset */
     if (++timing_report_counter >= 100) {
       timing_report_counter = 0;
+      float us_per_cycle = 1.0e6f / (float)SystemCoreClock;
       uint32_t cnt = foc_loop_cycles_count;
       if (cnt > 0) {
-        float us_per_cycle = 1.0e6f / (float)SystemCoreClock;
-        printf("FOC loop: min=%.2fus max=%.2fus avg=%.2fus (n=%lu)\r\n",
+        printf("FOC loop:     min=%.2fus max=%.2fus avg=%.2fus (n=%lu)\r\n",
                foc_loop_cycles_min * us_per_cycle,
                foc_loop_cycles_max * us_per_cycle,
                (foc_loop_cycles_sum / (float)cnt) * us_per_cycle,
@@ -163,6 +169,18 @@ void startMotorMgrTask(void *argument)
         foc_loop_cycles_max   = 0;
         foc_loop_cycles_sum   = 0;
         foc_loop_cycles_count = 0;
+      }
+      uint32_t as_cnt = angle_sensor_cycles_count;
+      if (as_cnt > 0) {
+        printf("Angle sensor: min=%.2fus max=%.2fus avg=%.2fus (n=%lu)\r\n",
+               angle_sensor_cycles_min * us_per_cycle,
+               angle_sensor_cycles_max * us_per_cycle,
+               (angle_sensor_cycles_sum / (float)as_cnt) * us_per_cycle,
+               (unsigned long)as_cnt);
+        angle_sensor_cycles_min   = 0xFFFFFFFFu;
+        angle_sensor_cycles_max   = 0;
+        angle_sensor_cycles_sum   = 0;
+        angle_sensor_cycles_count = 0;
       }
     }
 

@@ -20,8 +20,9 @@ void init_trig_lut(void) {
 }
 
 void norm_angle_rad(float *theta) {
-    while (*theta < 0) *theta += TWO_PI;
-    while (*theta >= TWO_PI) *theta -= TWO_PI;
+    if (!isfinite(*theta)) { *theta = 0.0f; return; }
+    *theta = fmodf(*theta, TWO_PI);
+    if (*theta < 0.0f) *theta += TWO_PI;
 }
 
 float fast_sin(float theta) {

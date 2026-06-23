@@ -30,7 +30,7 @@ CHANNEL   = sys.argv[1]         if len(sys.argv) > 1 else "can0"
 CAN_ID    = int(sys.argv[2])    if len(sys.argv) > 2 else 1
 DURATION  = float(sys.argv[3])  if len(sys.argv) > 3 else 10.0
 TARGET_HZ = float(sys.argv[4])  if len(sys.argv) > 4 else 200.0   # 0 = unlimited
-SINE_AMP  = float(sys.argv[5])  if len(sys.argv) > 5 else 0.0     # 0 = fixed command
+SINE_AMP  = float(sys.argv[5])  if len(sys.argv) > 5 else 0.6     # 0 = fixed command
 SINE_HZ   = 1.0
 
 MENU_MODE = 0

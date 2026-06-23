@@ -77,6 +77,12 @@ volatile uint32_t foc_loop_cycles_min = 0xFFFFFFFFu;
 volatile uint32_t foc_loop_cycles_max = 0;
 volatile uint32_t foc_loop_cycles_sum = 0;
 volatile uint32_t foc_loop_cycles_count = 0;
+
+/* angle_sensor_update timing instrumentation (DWT cycle counter) */
+volatile uint32_t angle_sensor_cycles_min = 0xFFFFFFFFu;
+volatile uint32_t angle_sensor_cycles_max = 0;
+volatile uint32_t angle_sensor_cycles_sum = 0;
+volatile uint32_t angle_sensor_cycles_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -342,7 +348,13 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
   {
+    uint32_t cyc_start = DWT->CYCCNT;
     angle_sensor_update(&hfoc.angle_sensor);
+    uint32_t cycles = DWT->CYCCNT - cyc_start;
+    if (cycles < angle_sensor_cycles_min) angle_sensor_cycles_min = cycles;
+    if (cycles > angle_sensor_cycles_max) angle_sensor_cycles_max = cycles;
+    angle_sensor_cycles_sum += cycles;
+    angle_sensor_cycles_count++;
   }
 }
 

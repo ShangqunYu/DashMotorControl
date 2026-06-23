@@ -64,14 +64,14 @@ T_MIN   = -40.0 * GR * KT   # N-m
 T_MAX   =  40.0 * GR * KT   # N-m
 
 # ── Sine trajectory parameters ────────────────────────────────────────────────
-AMPLITUDE   = 3.14/8.0 # rad   (peak displacement from zero)
-FREQUENCY   = 1.6 # Hz
+AMPLITUDE   = 3.14/4.0 # rad   (peak displacement from zero)
+FREQUENCY   = 0.2 # Hz
 UPDATE_HZ   = 200   # command rate
 CENTER      = 0.0   # rad   (center of sine wave)
 
 # ── Control gains ─────────────────────────────────────────────────────────────
-KP = 0   # N-m/rad
-KD = 0    # N-m·s/rad
+KP = 40   # N-m/rad
+KD = 1.0    # N-m·s/rad
 
 # ── Plot settings ─────────────────────────────────────────────────────────────
 PLOT_WINDOW_S = 5   # seconds of history shown
