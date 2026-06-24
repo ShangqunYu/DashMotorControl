@@ -31,6 +31,7 @@
 #include "angle_sensor.h"
 #include "user_config.h"
 #include "preference_writer.h"
+#include "drv8353.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -56,6 +57,7 @@ extern foc_t       hfoc;
 extern CalStruct   hcal;
 extern FSMStruct   hfsm;
 extern PreferenceWriter prefs;
+extern DRVStruct   drv;
 
 /* FOC loop timing instrumentation (set in HAL_ADCEx_InjectedConvCpltCallback) */
 extern volatile uint32_t foc_loop_cycles_min;
@@ -182,6 +184,7 @@ void startMotorMgrTask(void *argument)
         angle_sensor_cycles_sum   = 0;
         angle_sensor_cycles_count = 0;
       }
+      drv_print_faults(drv);
     }
 
     if (hfsm.curr_state == SET_ZERO_MODE) {
@@ -203,7 +206,7 @@ void startMotorMgrTask(void *argument)
     }
 
     if (hfsm.curr_state == ENCODER_MODE) {
-      printf("m_angle_raw:  %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad_raw);
+      // printf("m_angle_raw:  %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad_raw);
       printf("m_angle_comp: %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad);
     }
 

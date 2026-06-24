@@ -19,8 +19,8 @@
 typedef enum {
     CAL_STATE_IDLE,
     CAL_STATE_PHASE_SETTLING,         // lock at e=0, wait for rotor to settle
-    CAL_STATE_PHASE_DETECT,           // rotate one electrical cycle CW
-    CAL_STATE_PHASE_MEASURE,          // hold voltage at 2π, wait for rotor to catch up, then measure
+    CAL_STATE_PHASE_DETECT,           // rotate N_POLE_DETECT_CYCLES electrical cycles CW
+    CAL_STATE_PHASE_MEASURE,          // hold voltage, wait for rotor to settle, then measure total displacement
     CAL_STATE_LUT_SETTLING,           // re-settle at e=0 before sweep
     CAL_STATE_LUT_CW,                 // rotating CW at W_CAL, collecting raw samples
     CAL_STATE_LUT_CCW,                // rotating CCW at W_CAL, averaging raw samples

@@ -39,6 +39,7 @@ extern float cos_lut_new[LUT_SIZE];
 
 void init_trig_lut(void);
 void norm_angle_rad(float *theta);
+void fast_sincos(float theta, float *s, float *c);
 float fast_sin(float theta);
 float fast_cos(float theta);
 float fast_atan2(float y, float x);

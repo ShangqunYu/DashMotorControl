@@ -25,26 +25,23 @@ void norm_angle_rad(float *theta) {
     if (*theta < 0.0f) *theta += TWO_PI;
 }
 
-float fast_sin(float theta) {
-	norm_angle_rad(&theta);
+void fast_sincos(float theta, float *s, float *c) {
+    norm_angle_rad(&theta);
     float index_f = theta / LUT_STEP;
-    int index = (int)index_f;
-    float frac = index_f - index;
-
-    int next_index = (index + 1) % LUT_SIZE;
-
-    return sin_lut_new[index] * (1.0f - frac) + sin_lut_new[next_index] * frac;
+    int   index   = (int)index_f;
+    float frac    = index_f - (float)index;
+    int   next    = index + 1;
+    if (next >= LUT_SIZE) next = 0;
+    float f1 = 1.0f - frac;
+    *s = sin_lut_new[index] * f1 + sin_lut_new[next] * frac;
+    *c = cos_lut_new[index] * f1 + cos_lut_new[next] * frac;
 }
 
-float fast_cos(float theta) {
-	norm_angle_rad(&theta);
-    float index_f = theta / LUT_STEP;
-    int index = (int)index_f;
-    float frac = index_f - index;
+float fast_sin(float theta) { float s, c; fast_sincos(theta, &s, &c); return s; }
+float fast_cos(float theta) { float s, c; fast_sincos(theta, &s, &c); return c; }
 
-    int next_index = (index + 1) % LUT_SIZE;
-
-    return cos_lut_new[index] * (1.0f - frac) + cos_lut_new[next_index] * frac;
+void pre_calc_sin_cos(float theta, float *sin_theta, float *cos_theta) {
+    fast_sincos(theta, sin_theta, cos_theta);
 }
 
 float fast_atan2(float y, float x) {
@@ -72,12 +69,6 @@ float fast_atan2(float y, float x) {
     
     return r;
 }
-
-void pre_calc_sin_cos(float theta, float *sin_theta, float *cos_theta) {
-    *sin_theta = fast_sin(theta);
-    *cos_theta = fast_cos(theta);
-}
-
 
 void clarke_transform(float ia, float ib, float *i_alpha, float *i_beta) {
     // Clarke transform
