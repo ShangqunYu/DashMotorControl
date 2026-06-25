@@ -48,9 +48,8 @@ void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w) {
     __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, (uint32_t)(dtc_w * res));
 }
 
-void abc(float theta, float d, float q, float *a, float *b, float *c) {
-    float cf = fast_cos(theta);
-    float sf = fast_sin(theta);
+void abc(float sf, float cf, float d, float q, float *a, float *b, float *c) {
+
     *a =  cf * d - sf * q;
     *b =  (SQRT3_BY_TWO * sf - 0.5f * cf) * d - (-SQRT3_BY_TWO * cf - 0.5f * sf) * q;
     *c = (-SQRT3_BY_TWO * sf - 0.5f * cf) * d - ( SQRT3_BY_TWO * cf - 0.5f * sf) * q;
@@ -60,6 +59,9 @@ void svm(float v_max, float u, float v, float w,
          float *dtc_u, float *dtc_v, float *dtc_w) {
     float v_offset = (fminf(fminf(u, v), w) + fmaxf(fmaxf(u, v), w)) * 0.5f;
     float v_mid    = 0.5f * (DTC_MAX + DTC_MIN);
+    // *dtc_u = CONSTRAIN(0.5f * (u - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    // *dtc_v = CONSTRAIN(0.5f * (v - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    // *dtc_w = CONSTRAIN(0.5f * (w - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
     float scale    = 0.5f * OVERMODULATION / v_max;  // one division, three multiplies
     *dtc_u = CONSTRAIN((u - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
     *dtc_v = CONSTRAIN((v - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
@@ -100,15 +102,15 @@ void foc_update_velocity(foc_t *hfoc, float Ts) {
 
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad) {
     // uint32_t da, db, dc;
-    // float sin_theta, cos_theta;
-    // pre_calc_sin_cos(angle_rad, &sin_theta, &cos_theta);
+    float sin_theta, cos_theta;
+    pre_calc_sin_cos(angle_rad, &sin_theta, &cos_theta);
     // inverse_park_transform(vd_ref, vq_ref, sin_theta, cos_theta, &hfoc->v_alpha, &hfoc->v_beta);
     // svpwm(hfoc->v_alpha, hfoc->v_beta, hfoc->v_bus, hfoc->pwm_resolution, &da, &db, &dc);
     // foc_set_pwm(hfoc, da, db, dc);
 
     float va, vb, vc;
     float dtc_u, dtc_v, dtc_w;
-    abc(angle_rad, vd_ref, vq_ref, &va, &vb, &vc);
+    abc(sin_theta, cos_theta, vd_ref, vq_ref, &va, &vb, &vc);
     svm(hfoc->v_bus, va, vb, vc, &dtc_u, &dtc_v, &dtc_w);
     foc_set_pwm_dtc(hfoc, dtc_u, dtc_v, dtc_w);    
 
@@ -255,46 +257,60 @@ void foc_l_meas_update(foc_t *hfoc)
     }
 }
 
-void foc_current_control_update(foc_t *hfoc, float Ts) {
+void foc_current_control_update(foc_t *hfoc) {
+	float id_ref = hfoc->id_ref;
+	float iq_ref = hfoc->iq_ref;
+    const float v_bus = hfoc->v_bus;
+
+    float sin_theta, cos_theta;
+
+
+    float vd_ref = 0.0f, vq_ref = 0.0f;
+
+    float dtc_u, dtc_v, dtc_w;
+
+    // get currents
+    // DRV8302_get_current(&hfoc->drv8302, &ia, &ib);
     CurrentSensor_update(&hfoc->current_sensor);
 
-    // sin/cos computed once — reused by both forward Park and inverse Park
-    float sin_theta, cos_theta;
-    pre_calc_sin_cos(hfoc->angle_sensor.e_rad, &sin_theta, &cos_theta);
 
-    // Combined Clarke + Park (no intermediate i_alpha/i_beta allocation)
+    // Hard limit references
+    id_ref = CONSTRAIN(id_ref, -hfoc->max_current, hfoc->max_current);
+    iq_ref = CONSTRAIN(iq_ref, -hfoc->max_current, hfoc->max_current);
+
+    // pre calculate sin & cos
+    pre_calc_sin_cos(hfoc->angle_sensor.e_rad, &sin_theta, &cos_theta);
+    // pre_calc_sin_cos(0.0f, &sin_theta, &cos_theta);
+
     float id, iq;
     clarke_park_transform(hfoc->current_sensor.ia, hfoc->current_sensor.ib,
                           sin_theta, cos_theta, &id, &iq);
+    
 
-    const float v_bus = hfoc->v_bus;
-    float id_ref = CONSTRAIN(hfoc->id_ref, -hfoc->max_current, hfoc->max_current);
-    float iq_ref = CONSTRAIN(hfoc->iq_ref, -hfoc->max_current, hfoc->max_current);
-
+    // set dynamic max output vd and vq
     hfoc->id_ctrl.out_max = hfoc->id_ctrl.out_max_dynamic * v_bus;
     hfoc->iq_ctrl.out_max = hfoc->iq_ctrl.out_max_dynamic * v_bus;
 
-    float vd_ref = pi_control(&hfoc->id_ctrl, id_ref - id);
-    float vq_ref = pi_control(&hfoc->iq_ctrl, iq_ref - iq);
+    vd_ref = pi_control(&hfoc->id_ctrl, id_ref - id);
+    vq_ref = pi_control(&hfoc->iq_ctrl, iq_ref - iq);
 
-    // Inverse Park using the same sin/cos — no redundant trig lookup
-    float v_alpha, v_beta;
-    inverse_park_transform(vd_ref, vq_ref, sin_theta, cos_theta, &v_alpha, &v_beta);
     float va, vb, vc;
-    inverse_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
-
-    float dtc_u, dtc_v, dtc_w;
+    abc(sin_theta, cos_theta, vd_ref, vq_ref, &va, &vb, &vc);
     svm(v_bus, va, vb, vc, &dtc_u, &dtc_v, &dtc_w);
     foc_set_pwm_dtc(hfoc, dtc_u, dtc_v, dtc_w);
+    
 
+    // copy to struct for debug
     hfoc->ia = hfoc->current_sensor.ia;
     hfoc->ib = hfoc->current_sensor.ib;
     hfoc->ic = -hfoc->current_sensor.ia - hfoc->current_sensor.ib;
+
     hfoc->id = id;
     hfoc->iq = iq;
-    hfoc->vd = vd_ref;
-    hfoc->vq = vq_ref;
+
     hfoc->va = dtc_u * v_bus;
     hfoc->vb = dtc_v * v_bus;
     hfoc->vc = dtc_w * v_bus;
+    hfoc->vd = vd_ref;
+    hfoc->vq = vq_ref;
 }

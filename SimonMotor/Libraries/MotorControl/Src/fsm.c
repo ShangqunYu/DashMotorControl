@@ -59,22 +59,22 @@ void run_fsm(FSMStruct *fsmstate)
             break;
 
         case TORQUE_CONTROL_MODE:
-            foc_current_control_update(&hfoc, FOC_TS);
+            foc_current_control_update(&hfoc);
             break;
 
         case SPEED_CONTROL_MODE:
             foc_speed_control_update(&hfoc, hfoc.vel_ref);
-            foc_current_control_update(&hfoc, FOC_TS);
+            foc_current_control_update(&hfoc);
             break;
 
         case POSITION_CONTROL_MODE:
             foc_speed_control_update(&hfoc, hfoc.vel_ref);
-            foc_current_control_update(&hfoc, FOC_TS);
+            foc_current_control_update(&hfoc);
             break;
 
         case MIT_MODE:
             foc_mit_control_update(&hfoc);
-            foc_current_control_update(&hfoc, FOC_TS);
+            foc_current_control_update(&hfoc);
             break;
 
         case CALIBRATION_MODE:
@@ -140,7 +140,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
         case POSITION_CONTROL_MODE:
         case MIT_MODE:
             drv_enable_gd(drv);
-            foc_current_control_update(&hfoc, 0.0f);   /* reset PI integrators */
+            foc_current_control_update(&hfoc);   /* reset PI integrators */
             HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
             foc_zero_commands(&hfoc);
             break;

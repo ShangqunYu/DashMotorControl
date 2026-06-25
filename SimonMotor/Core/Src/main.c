@@ -128,10 +128,10 @@ int main(void)
   // if(isnan(TEMP_MAX) || TEMP_MAX==-1){TEMP_MAX = 125.0f;}
   if(isnan(I_MAX_CONT) || I_MAX_CONT==-1){I_MAX_CONT = 14.0f;}
   if(isnan(I_CAL)||I_CAL==-1){I_CAL = 2.0f;}
-  I_CAL=15.0f;
+  I_CAL=10.0f;
   if(isnan(PPAIRS) || PPAIRS==-1){PPAIRS = 21.0f;}
   if(isnan(GR) || GR==-1){GR = 1.0f;}
-  GR = 1.0f;
+  GR = 18.0f;
   if(isnan(KT) || KT==-1){KT = 1.0f;}
   float KT_AFTER_REDUCER = 2.97f;
   KT = KT_AFTER_REDUCER/GR;
@@ -348,13 +348,13 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
   {
-    // uint32_t cyc_start = DWT->CYCCNT;
+    uint32_t cyc_start = DWT->CYCCNT;
     angle_sensor_update(&hfoc.angle_sensor);
-    // uint32_t cycles = DWT->CYCCNT - cyc_start;
-    // if (cycles < angle_sensor_cycles_min) angle_sensor_cycles_min = cycles;
-    // if (cycles > angle_sensor_cycles_max) angle_sensor_cycles_max = cycles;
-    // angle_sensor_cycles_sum += cycles;
-    // angle_sensor_cycles_count++;
+    uint32_t cycles = DWT->CYCCNT - cyc_start;
+    if (cycles < angle_sensor_cycles_min) angle_sensor_cycles_min = cycles;
+    if (cycles > angle_sensor_cycles_max) angle_sensor_cycles_max = cycles;
+    angle_sensor_cycles_sum += cycles;
+    angle_sensor_cycles_count++;
   }
 }
 

@@ -124,13 +124,13 @@ void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc);
 void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w);
-void abc(float theta, float d, float q, float *a, float *b, float *c);
+void abc(float sf, float cf, float d, float q, float *a, float *b, float *c);
 void svm(float v_max, float u, float v, float w,
          float *dtc_u, float *dtc_v, float *dtc_w);
 void foc_speed_control_update(foc_t *hfoc, float vel_reference);
 void foc_update_velocity(foc_t *hfoc, float Ts);
 void foc_mit_control_update(foc_t *hfoc);
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad);
-void foc_current_control_update(foc_t *hfoc, float Ts);
+void foc_current_control_update(foc_t *hfoc);
 
 #endif /* FOC_INC_FOC_H_ */

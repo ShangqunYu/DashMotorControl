@@ -25,13 +25,15 @@
 #include <math.h>
 #include <stdio.h>
 
+#define N_POLE_DETECT_CYCLES 20
+
 // Drive id=I_CAL, iq=0 at a forced electrical angle — used during calibration
 // sweeps so the PI loop regulates current instead of applying raw voltage.
 static void cal_force_current(foc_t *hfoc, float angle_rad, float Ts) {
     hfoc->angle_sensor.e_rad = angle_rad;
     hfoc->id_ref = I_CAL;
     hfoc->iq_ref = 0.0f;
-    foc_current_control_update(hfoc, Ts);
+    foc_current_control_update(hfoc);
 }
 
 void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal) {
@@ -47,7 +49,7 @@ void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal) {
     hcal->cal_state        = CAL_STATE_PHASE_SETTLING;
     hcal->cal_start_time   = HAL_GetTick();
 
-    foc_current_control_update(hfoc, 0.0f);  // reset PI integrators
+    foc_current_control_update(hfoc);  // reset PI integrators
     printf("Calibration started: settling...\r\n");
 }
 
@@ -58,7 +60,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
     if (hcal->cal_state == CAL_STATE_PHASE_SETTLING) {
         cal_force_current(hfoc, 0.0f, Ts);
         if (HAL_GetTick() - hcal->cal_start_time >= 1000) {
-            hcal->phase_raw_start = hfoc->angle_sensor.ma732.angle_raw;
+            hcal->phase_raw_start = hfoc->angle_sensor.multi_rotor_rad;
             hcal->lut_theta_ref   = 0.0f;
             hcal->cal_state       = CAL_STATE_PHASE_DETECT;
         }
@@ -70,7 +72,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
         hcal->lut_theta_ref += W_CAL * Ts;
         cal_force_current(hfoc, hcal->lut_theta_ref, Ts);
 
-        if (hcal->lut_theta_ref >= TWO_PI) {
+        if (hcal->lut_theta_ref >= (float)N_POLE_DETECT_CYCLES * TWO_PI) {
             // Hold at 2π so the rotor can catch up before we measure
             hcal->cal_start_time = HAL_GetTick();
             hcal->cal_state      = CAL_STATE_PHASE_MEASURE;
@@ -80,16 +82,15 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts)
 
     // ── Phase 0c: hold at 2π, let rotor settle, then measure ────────────────
     if (hcal->cal_state == CAL_STATE_PHASE_MEASURE) {
-        cal_force_current(hfoc, TWO_PI, Ts);
+        cal_force_current(hfoc, (float)N_POLE_DETECT_CYCLES * TWO_PI, Ts);
 
         if (HAL_GetTick() - hcal->cal_start_time >= 500) {
-            float raw_end = hfoc->angle_sensor.ma732.angle_raw;
+            float raw_end = hfoc->angle_sensor.multi_rotor_rad;
             float delta   = raw_end - hcal->phase_raw_start;
-            while (delta >  PI) delta -= TWO_PI;
-            while (delta < -PI) delta += TWO_PI;
-            printf("Phase detection delta: %.4f rad\r\n", delta);
+            printf("Phase detection: total_mech=%.4f rad over %d e-cycles\r\n",
+                   delta, N_POLE_DETECT_CYCLES);
 
-            uint8_t ppairs = (uint8_t)roundf(TWO_PI / fabsf(delta));
+            uint8_t ppairs = (uint8_t)roundf((float)N_POLE_DETECT_CYCLES * TWO_PI / fabsf(delta));
             if (ppairs < 1)          ppairs = 1;
             if (ppairs > PPAIRS_MAX) ppairs = (uint8_t)PPAIRS_MAX;
 
