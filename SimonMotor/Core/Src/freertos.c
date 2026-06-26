@@ -29,6 +29,7 @@
 #include "foc_calibration.h"
 #include "fsm.h"
 #include "angle_sensor.h"
+#include "analog_sensor.h"
 #include "user_config.h"
 #include "preference_writer.h"
 #include "drv8353.h"
@@ -152,12 +153,18 @@ void startMotorMgrTask(void *argument)
 {
   /* USER CODE BEGIN startMotorMgrTask */
   uint32_t timing_report_counter = 0;
+  uint32_t temp_update_counter   = 0;
   for (;;)
   {
     osDelay(10);
 
-    /* Print FOC-loop (run_fsm) timing stats once per second, then reset */
-    if (++timing_report_counter >= 100) {
+    if (++temp_update_counter >= 100) {
+      temp_update_counter = 0;
+      hfoc.motor_temp = get_temperature();
+    }
+
+    /* Print FOC-loop (run_fsm) timing stats once per 5 seconds, then reset */
+    if (++timing_report_counter >= 500) {
       timing_report_counter = 0;
       float us_per_cycle = 1.0e6f / (float)SystemCoreClock;
       uint32_t cnt = foc_loop_cycles_count;

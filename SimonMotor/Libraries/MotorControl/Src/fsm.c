@@ -34,7 +34,6 @@ void run_fsm(FSMStruct *fsmstate)
 {
     /* 1. Per-cycle pre-processing ----------------------------------------- */
     hfoc.v_bus = get_power_voltage();
-    hfoc.motor_temp = get_temperature();
     foc_update_velocity(&hfoc, FOC_TS);
 
     /* 2. Apply pending MIT parameters (not a mode change) ----------------- */
@@ -80,7 +79,7 @@ void run_fsm(FSMStruct *fsmstate)
         case CALIBRATION_MODE:
             if (hcal.cal_state != CAL_STATE_IDLE &&
                 hcal.cal_state != CAL_STATE_LUT_POSTPROC_PENDING) {
-                foc_cal_encoder_misalignment_update(&hfoc, &hcal, FOC_TS);
+                foc_cal_encoder_misalignment_update(&hfoc, &hcal);
             }
             /* LUT_POSTPROC_PENDING: postprocessing is compute-intensive; the
              * FreeRTOS task calls foc_cal_lut_postprocess() from the main loop.

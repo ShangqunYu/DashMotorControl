@@ -37,16 +37,16 @@ typedef struct {
     uint8_t     detected_ppairs;     // pole pairs measured; 0 = not yet detected
 
     /* LUT sweep */
-    float       lut_raw[LUT_NUM_SAMPLES_MAX]; // CW/CCW-averaged raw error samples
-    uint16_t    lut_num_samples;              // actual samples = detected_ppairs * LUT_SAMPLES_PER_PPAIR
-    uint16_t    lut_cal_idx;
+    float       all_measurements_for_lookup_table[LUT_NUM_SAMPLES_MAX]; // CW/CCW-averaged raw error samples
+    uint16_t    num_measurements_to_take_for_lut;              // actual samples = detected_ppairs * LUT_SAMPLES_PER_PPAIR
+    uint16_t    curr_measurement_index;
     float       lut_theta_ref;
     float       lut_next_sample_e_rad;
 } CalStruct;
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
 void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal);
-void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal, float Ts);
+void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal);
 void foc_cal_lut_postprocess(foc_t *hfoc, CalStruct *hcal);
 
 #endif /* FOC_CALIBRATION_H_ */
