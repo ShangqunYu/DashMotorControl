@@ -78,7 +78,7 @@ void angle_sensor_update(AngleSensor_t *sensor);
 
 // Compute mechanical velocity in rad/s from the delta of s_rotor_rad.
 // Call once per FOC cycle (Ts = FOC sample period in seconds).
-void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts);
+void angle_sensor_update_velocity(AngleSensor_t *sensor);
 
 // Capture the current position as the mechanical zero.
 // After this call s_rotor_rad == 0; save m_zero to flash from the main loop.

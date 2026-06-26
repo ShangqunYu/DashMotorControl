@@ -33,8 +33,8 @@ extern DRVStruct        drv;
 void run_fsm(FSMStruct *fsmstate)
 {
     /* 1. Per-cycle pre-processing ----------------------------------------- */
-    hfoc.v_bus = get_power_voltage();
-    foc_update_velocity(&hfoc, FOC_TS);
+    update_power_voltage(&hfoc.v_bus);
+    foc_update_velocity(&hfoc);
 
     /* 2. Apply pending MIT parameters (not a mode change) ----------------- */
     if (hfoc.new_cmd) {
@@ -55,20 +55,6 @@ void run_fsm(FSMStruct *fsmstate)
         case MENU_MODE:
         case SETUP_MODE:
             /* Coast — no PWM drive */
-            break;
-
-        case TORQUE_CONTROL_MODE:
-            foc_current_control_update(&hfoc);
-            break;
-
-        case SPEED_CONTROL_MODE:
-            foc_speed_control_update(&hfoc, hfoc.vel_ref);
-            foc_current_control_update(&hfoc);
-            break;
-
-        case POSITION_CONTROL_MODE:
-            foc_speed_control_update(&hfoc, hfoc.vel_ref);
-            foc_current_control_update(&hfoc);
             break;
 
         case MIT_MODE:
@@ -134,13 +120,10 @@ void fsm_enter_state(FSMStruct *fsmstate)
             enter_setup_state();
             break;
 
-        case TORQUE_CONTROL_MODE:
-        case SPEED_CONTROL_MODE:
-        case POSITION_CONTROL_MODE:
         case MIT_MODE:
             drv_enable_gd(drv);
             foc_current_control_update(&hfoc);   /* reset PI integrators */
-            HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
             foc_zero_commands(&hfoc);
             break;
 
@@ -155,7 +138,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
 
         case R_MEAS_MODE:
             drv_enable_gd(drv);
-            HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
             if (hfoc.meas_inj_amp <= 0.0f) { hfoc.meas_inj_amp = 1.0f; }
             hfoc.meas_inj_amp = 3.0f;
             hfoc.meas_inj_n = 0;
@@ -165,7 +148,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
 
         case L_MEAS_MODE:
             drv_enable_gd(drv);
-            HAL_GPIO_WritePin(LED, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
             if (hfoc.meas_inj_amp <= 0.0f) { hfoc.meas_inj_amp = 1.0f; }
             hfoc.meas_inj_n   = 0;
             hfoc.meas_done    = 0;
@@ -189,10 +172,8 @@ void fsm_exit_state(FSMStruct *fsmstate)
 {
     switch (fsmstate->curr_state) {
 
-        case TORQUE_CONTROL_MODE:
-        case SPEED_CONTROL_MODE:
-        case POSITION_CONTROL_MODE:
         case MIT_MODE:
+            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_RESET);
         case CALIBRATION_MODE:
         case R_MEAS_MODE:
         case L_MEAS_MODE:
@@ -200,7 +181,7 @@ void fsm_exit_state(FSMStruct *fsmstate)
             open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
             hfoc.id_ref = 0.0f;
             hfoc.iq_ref = 0.0f;
-            HAL_GPIO_WritePin(LED, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_RESET);
             break;
 
         case MENU_MODE:
@@ -247,13 +228,7 @@ void update_fsm(FSMStruct *fsmstate, char fsm_input)
                     fsmstate->next_state = L_MEAS_MODE;
                     break;
                 case ZERO_CMD:
-                    angle_sensor_set_m_zero(&hfoc.angle_sensor);
-                    M_ZERO_RAD = hfoc.angle_sensor.m_zero;
-                    if (!preference_writer_ready(prefs)) { preference_writer_open(&prefs); }
-                    preference_writer_flush(&prefs);
-                    preference_writer_close(&prefs);
-                    preference_writer_load(prefs);
-                    printf("Saved zero: %.4f rad\r\n", M_ZERO_RAD);
+                    fsmstate->next_state = SET_ZERO_MODE;
                     break;
             }
             break;
@@ -269,8 +244,6 @@ void update_fsm(FSMStruct *fsmstate, char fsm_input)
             break;
 
         case ENCODER_MODE:
-        case TORQUE_CONTROL_MODE:
-        case SPEED_CONTROL_MODE:
         case MIT_MODE:
         case CALIBRATION_MODE:
         default:
@@ -346,10 +319,6 @@ void process_user_input(FSMStruct *fsmstate)
             CAN_TIMEOUT = atoi(fsmstate->cmd_buff);
             printf("CAN_TIMEOUT set to %d\r\n", CAN_TIMEOUT);
             break;
-        // case 'h':
-        //     TEMP_MAX = fmaxf(fminf(atof(fsmstate->cmd_buff), 150.0f), 0.0f);
-        //     printf("TEMP_MAX set to %f\r\n", TEMP_MAX);
-        //     break;
         case 'c':
             I_MAX_CONT = fmaxf(fminf(atof(fsmstate->cmd_buff), 40.0f), 0.0f);
             printf("I_MAX_CONT set to %f\r\n", I_MAX_CONT);

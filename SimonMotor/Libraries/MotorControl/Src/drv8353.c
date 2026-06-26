@@ -66,7 +66,7 @@ void drv_calibrate(DRVStruct drv){
 }
 void drv_init(DRVStruct drv, float i_max) {
     HAL_GPIO_WritePin(DRV_CS, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(ENABLE_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DRV_ENABLE_PIN, GPIO_PIN_SET);
     HAL_Delay(1);
     drv_write_DCR(drv, 0x0, DIS_GDF_EN, 0x0, PWM_MODE_3X, 0x0, 0x0, 0x0, 0x0, 0x1);
     HAL_Delay(1);

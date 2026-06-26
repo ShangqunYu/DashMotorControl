@@ -34,11 +34,10 @@ typedef struct {
 
     /* Phase-order / pole-pair detection */
     float       phase_raw_start;     // raw MA732 angle (rad) at start of detection sweep
-    uint8_t     detected_ppairs;     // pole pairs measured; 0 = not yet detected
 
     /* LUT sweep */
     float       all_measurements_for_lookup_table[LUT_NUM_SAMPLES_MAX]; // CW/CCW-averaged raw error samples
-    uint16_t    num_measurements_to_take_for_lut;              // actual samples = detected_ppairs * LUT_SAMPLES_PER_PPAIR
+    uint16_t    num_measurements_to_take_for_lut;              // actual samples = ppairs * LUT_SAMPLES_PER_PPAIR
     uint16_t    curr_measurement_index;
     float       lut_theta_ref;
     float       lut_next_sample_e_rad;

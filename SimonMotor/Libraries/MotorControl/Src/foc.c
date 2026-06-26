@@ -21,35 +21,24 @@ void foc_zero_commands(foc_t *hfoc) {
     hfoc->mit_cmd.v_des = 0;
 }
 
-void foc_sensor_init(foc_t *hfoc, float e_zero_rad, dir_mode_t sensor_dir) {
-	hfoc->angle_sensor.e_zero = e_zero_rad;
-	hfoc->angle_sensor.sensor_dir = sensor_dir;
+void foc_sensor_init(foc_t *hfoc) {
+	hfoc->angle_sensor.e_zero = E_ZERO_RAD;
+    hfoc->angle_sensor.m_zero = M_ZERO_RAD;
+	hfoc->angle_sensor.sensor_dir = PHASE_ORDER;
 }
 
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim) {
-	hfoc->timer = htim;
 	hfoc->pwm_resolution = __HAL_TIM_GET_AUTORELOAD(htim);
 }
 
-void foc_set_pwm(foc_t *hfoc, uint32_t da, uint32_t db, uint32_t dc) {
-    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, da);
-    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, db);
-    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, dc);
-}
 
 void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w) {
-    uint32_t res = hfoc->pwm_resolution;
-    // invert duty cycle because if you want current to flow, you need to drive low (sink current) not high (source current)
-    dtc_u = 1.0f - dtc_u;
-    dtc_v = 1.0f - dtc_v;
-    dtc_w = 1.0f - dtc_w;
-    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_U, (uint32_t)(dtc_u * res));
-    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_V, (uint32_t)(dtc_v * res));
-    __HAL_TIM_SET_COMPARE(&TIM_PWM, TIM_CH_W, (uint32_t)(dtc_w * res));
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, PWM_A, (uint32_t)(dtc_u * hfoc->pwm_resolution));
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, PWM_B, (uint32_t)(dtc_v * hfoc->pwm_resolution));
+    __HAL_TIM_SET_COMPARE(&TIM_PWM, PWM_C, (uint32_t)(dtc_w * hfoc->pwm_resolution));
 }
 
 void abc(float sf, float cf, float d, float q, float *a, float *b, float *c) {
-
     *a =  cf * d - sf * q;
     *b =  (SQRT3_BY_TWO * sf - 0.5f * cf) * d - (-SQRT3_BY_TWO * cf - 0.5f * sf) * q;
     *c = (-SQRT3_BY_TWO * sf - 0.5f * cf) * d - ( SQRT3_BY_TWO * cf - 0.5f * sf) * q;
@@ -72,14 +61,8 @@ void foc_set_limit_current(foc_t *hfoc, float i_limit) {
 	hfoc->max_current = i_limit;
 }
 
-void foc_speed_control_update(foc_t *hfoc, float vel_reference) {
-    if (hfoc == NULL) return;
-    hfoc->id_ref = 0.0f;
-    hfoc->iq_ref = pid_control(&hfoc->speed_ctrl, vel_reference - hfoc->angle_sensor.rotor_vel);
-}
 
 void foc_mit_control_update(foc_t *hfoc){
-    if (hfoc == NULL) return;
     hfoc->id_ref = 0.0f;
     float pos_error = hfoc->mit_cmd.p_des - hfoc->angle_sensor.mech_angle_rad;
     float vel_error = hfoc->mit_cmd.v_des - hfoc->angle_sensor.mech_angle_vel;
@@ -89,9 +72,9 @@ void foc_mit_control_update(foc_t *hfoc){
     hfoc->iq_ref = CONSTRAIN(hfoc->iq_ref, -hfoc->max_current, hfoc->max_current);
 }
 
-void foc_update_velocity(foc_t *hfoc, float Ts) {
+void foc_update_velocity(foc_t *hfoc) {
     // Compute mechanical velocity in rad/s from LUT-corrected angle delta
-    angle_sensor_update_velocity(&hfoc->angle_sensor, Ts);
+    angle_sensor_update_velocity(&hfoc->angle_sensor);
 
     // Restart SPI read if data is ready
     if (MA732_get_val_flag()) {
@@ -101,19 +84,13 @@ void foc_update_velocity(foc_t *hfoc, float Ts) {
 }
 
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad) {
-    // uint32_t da, db, dc;
     float sin_theta, cos_theta;
     pre_calc_sin_cos(angle_rad, &sin_theta, &cos_theta);
-    // inverse_park_transform(vd_ref, vq_ref, sin_theta, cos_theta, &hfoc->v_alpha, &hfoc->v_beta);
-    // svpwm(hfoc->v_alpha, hfoc->v_beta, hfoc->v_bus, hfoc->pwm_resolution, &da, &db, &dc);
-    // foc_set_pwm(hfoc, da, db, dc);
-
     float va, vb, vc;
     float dtc_u, dtc_v, dtc_w;
     abc(sin_theta, cos_theta, vd_ref, vq_ref, &va, &vb, &vc);
     svm(hfoc->v_bus, va, vb, vc, &dtc_u, &dtc_v, &dtc_w);
-    foc_set_pwm_dtc(hfoc, dtc_u, dtc_v, dtc_w);    
-
+    foc_set_pwm_dtc(hfoc, 1.0f-dtc_u, 1.0f-dtc_v, 1.0f-dtc_w); // invert duty cycle because if you want current to flow, you need to drive low (sink current) not high (source current)   
 }
 
 /* ── R measurement ───────────────────────────────────────────────────────────
@@ -297,7 +274,7 @@ void foc_current_control_update(foc_t *hfoc) {
     float va, vb, vc;
     abc(sin_theta, cos_theta, vd_ref, vq_ref, &va, &vb, &vc);
     svm(v_bus, va, vb, vc, &dtc_u, &dtc_v, &dtc_w);
-    foc_set_pwm_dtc(hfoc, dtc_u, dtc_v, dtc_w);
+    foc_set_pwm_dtc(hfoc, 1.0f-dtc_u, 1.0f-dtc_v, 1.0f-dtc_w); // invert duty cycle because if you want current to flow, you need to drive low (sink current) not high (source current)
     
 
     // copy to struct for debug
@@ -308,9 +285,4 @@ void foc_current_control_update(foc_t *hfoc) {
     hfoc->id = id;
     hfoc->iq = iq;
 
-    hfoc->va = dtc_u * v_bus;
-    hfoc->vb = dtc_v * v_bus;
-    hfoc->vc = dtc_w * v_bus;
-    hfoc->vd = vd_ref;
-    hfoc->vq = vq_ref;
 }

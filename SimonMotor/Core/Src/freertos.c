@@ -160,7 +160,7 @@ void startMotorMgrTask(void *argument)
 
     if (++temp_update_counter >= 100) {
       temp_update_counter = 0;
-      hfoc.motor_temp = get_temperature();
+      update_temperature(&hfoc.motor_temp);
     }
 
     /* Print FOC-loop (run_fsm) timing stats once per 5 seconds, then reset */
@@ -207,6 +207,8 @@ void startMotorMgrTask(void *argument)
       memcpy(&ENCODER_LUT, hfoc.angle_sensor.encd_error_comp,
              sizeof(hfoc.angle_sensor.encd_error_comp));
       E_ZERO_RAD   = hfoc.angle_sensor.e_zero;
+      PHASE_ORDER = hfoc.angle_sensor.sensor_dir;
+      PPAIRS = hfoc.angle_sensor.pole_pairs;
       CALIBRATION_DONE_FLAG = 1;
       osSemaphoreRelease(flash_write_sem);
       printf("LUT calibration complete, saved to flash\r\n");
@@ -228,7 +230,6 @@ void startMotorMgrTask(void *argument)
     // printf("i_c: %.3f\r\n",      hfoc.current_sensor.ic_filtered);
     // printf("m_angle: %.4f\r\n",  hfoc.angle_sensor.s_rotor_rad);
     // printf("e_angle: %.4f\r\n",  hfoc.angle_sensor.e_rad);
-    // printf("rpm_ref: %.3f\r\n",  hfoc.vel_ref);
   }
   /* USER CODE END startMotorMgrTask */
 }

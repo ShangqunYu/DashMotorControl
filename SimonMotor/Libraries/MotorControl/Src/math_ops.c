@@ -22,12 +22,7 @@ float fminf3(float x, float y, float z){
     /// Returns minimum of x, y, z ///
     return (x < y ? (x < z ? x : z) : (y < z ? y : z));
     }
-/*
-float roundf(float x){
-    /// Returns nearest integer ///
-    return x < 0.0f ? ceilf(x - 0.5f) : floorf(x + 0.5f);
-    }
-  */
+
 void limit_norm(float *x, float *y, float limit){
     /// Scales the lenght of vector (x, y) to be <= limit ///
     float norm = sqrtf(*x * *x + *y * *y);
@@ -42,19 +37,17 @@ void limit(float *x, float min, float max){
     }
 
 int float_to_uint(float x, float x_min, float x_max, int bits){
-    /// Converts a float to an unsigned int, given range and number of bits ///
-    float span = x_max - x_min;
-    float offset = x_min;
-    return (int) ((x-offset)*((float)((1<<bits)-1))/span);
-    }
-    
-    
+    if (x < x_min) x = x_min;
+    if (x > x_max) x = x_max;
+    return (int)((x - x_min) * (float)((1<<bits)-1) / (x_max - x_min));
+}
+
 float uint_to_float(int x_int, float x_min, float x_max, int bits){
-    /// converts unsigned int to float, given range and number of bits ///
-    float span = x_max - x_min;
-    float offset = x_min;
-    return ((float)x_int)*span/((float)((1<<bits)-1)) + offset;
-    }
+    int max_int = (1<<bits) - 1;
+    if (x_int < 0)        x_int = 0;
+    if (x_int > max_int)  x_int = max_int;
+    return (float)x_int * (x_max - x_min) / (float)max_int + x_min;
+}
 
 float sin_lut(float theta){
 	theta = fmodf(theta, TWO_PI_F);

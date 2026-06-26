@@ -21,16 +21,13 @@ CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
 # Mode bytes (must match state in foc.h)
 MENU_MODE = 0
-TORQUE_CONTROL_MODE  = 1
-SPEED_CONTROL_MODE   = 2
-POSITION_CONTROL_MODE = 3
-CALIBRATION_MODE     = 4
-MIT_MODE             = 5
-ENCODER_MODE         = 6
-SET_ZERO_MODE        = 7
-SETUP_MODE           = 8
-R_MEAS_MODE          = 9
-L_MEAS_MODE          = 10
+CALIBRATION_MODE     = 1
+MIT_MODE             = 2
+ENCODER_MODE         = 3
+SET_ZERO_MODE        = 4
+SETUP_MODE           = 5
+R_MEAS_MODE          = 6
+L_MEAS_MODE          = 7
 
 # Scaling ranges — must match flash-stored values on the motor
 # V_BUS and TEMP are hardcoded in hw_config.h; the rest are user-configurable

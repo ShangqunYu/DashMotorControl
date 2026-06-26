@@ -44,8 +44,7 @@ void CurrentSensor_sample_offset(CurrentSensor *sensor);
 void CurrentSensor_end_offset_calibration(CurrentSensor *sensor);
 void CurrentSensor_calibrate(CurrentSensor *sensor, uint32_t duration_ms);
 
-float get_power_voltage(void);
-
-float get_temperature(void);
+void update_power_voltage(float *v_bus);
+void update_temperature(float *motor_temp);
 
 #endif /* INC_ANALOG_SENSOR_H_ */

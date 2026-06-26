@@ -4,6 +4,7 @@
 
 #include "angle_sensor.h"
 #include "FOC_math.h"
+#include "hw_config.h"
 #include "math_ops.h"
 #include "user_config.h"
 #include <string.h>   /* memcpy */
@@ -105,20 +106,22 @@ void angle_sensor_update(AngleSensor_t *sensor)
 
 void angle_sensor_set_m_zero(AngleSensor_t *sensor)
 {
-    if (sensor == NULL) return;
-
-    // s_rotor_rad = angle_from_ezero - m_zero
-    // To make current position = 0: new m_zero = angle_from_ezero = m_zero + s_rotor_rad
+    /*
+     * To make the current position to be the new mechanical zero
+     * We know that s_rotor_rad = angle_from_ezero - m_zero
+     * m_zero := m_zero + s_rotor_rad = m_zero + angle_from_ezero - m_zero = angle_from_ezero
+    */
     sensor->m_zero += sensor->s_rotor_rad;
     norm_angle_rad(&sensor->m_zero);
-    sensor->s_rotor_rad     = 0.0f;
-    sensor->s_rotor_rad_raw = 0.0f;
+    sensor->s_rotor_rad      = 0.0f;
+    sensor->s_rotor_rad_raw  = 0.0f;
+    sensor->turns            = 0;
+    sensor->multi_rotor_rad  = 0.0f;
+    sensor->mech_angle_rad   = 0.0f;
 }
 
-void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
+void angle_sensor_update_velocity(AngleSensor_t *sensor)
 {
-    if (sensor == NULL || Ts <= 0.0f) return;
-
     if (!sensor->obs_ready) {
         sensor->pos_hat   = sensor->multi_rotor_rad;
         sensor->vel_hat   = 0.0f;
@@ -126,7 +129,7 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor, float Ts)
     }
 
     // Predict
-    sensor->pos_hat += Ts * sensor->vel_hat;
+    sensor->pos_hat += FOC_TS * sensor->vel_hat;
 
     // Correct
     float error = sensor->multi_rotor_rad - sensor->pos_hat;

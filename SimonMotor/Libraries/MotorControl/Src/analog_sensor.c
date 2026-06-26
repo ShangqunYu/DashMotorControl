@@ -80,25 +80,16 @@ void CurrentSensor_calibrate(CurrentSensor *sensor, uint32_t duration_ms) {
     CurrentSensor_end_offset_calibration(sensor);
 }
 
-float get_power_voltage(void) {
-    static float pv_filtered = 0.0f;
-    const float filter_alpha = 0.2f;
-    float pv = (float)ADC2->JDR2 * V_SCALE;
-    pv_filtered = (1.0f - filter_alpha) * pv_filtered + filter_alpha * pv;
-    return pv_filtered;
+void update_power_voltage(float *v_bus) {
+    float raw = (float)ADC2->JDR2 * V_SCALE;
+    *v_bus += VBUS_FILT_ALPHA * (raw - *v_bus);
 }
 
-float get_temperature(void) {
-    static float temp_filtered = 25.0f;
-    const float filter_alpha = 0.1f;
-
-    // Voltage divider assumed: VCC → BASE_RESISTOR → ADC_pin → thermistor → GND
-    // If wired the other way, swap to: BASE_RESISTOR * (4095.0f - adc_raw) / adc_raw
+void update_temperature(float *motor_temp) {
+    // Voltage divider: VCC →  thermistor → ADC_pin → BASE_RESISTOR → GND
+    // Adc reading is measuring the base resistor voltage drop. 
     float adc_raw = (float)ADC3->JDR2;
-    float r_therm = BASE_RESISTOR * (4095.0f - adc_raw) / adc_raw  ;
-
-    float temp = 25.0f + (r_therm - THERMISTOR_NOMINAL) / OHM_PER_DEGREE_C;
-
-    temp_filtered = (1.0f - filter_alpha) * temp_filtered + filter_alpha * temp;
-    return temp_filtered;
+    float thermistor_resistance = BASE_RESISTOR_RESISTANCE * (4095.0f - adc_raw) / adc_raw;
+    float temp    = THERMISTOR_NOMINAL_TEMP + (thermistor_resistance - THERMISTOR_NOMINAL_RESISTANCE) / OHM_PER_DEGREE_C;
+    *motor_temp  += TEMP_FILT_ALPHA * (temp - *motor_temp);
 }

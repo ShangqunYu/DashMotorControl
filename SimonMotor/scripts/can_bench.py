@@ -34,7 +34,7 @@ SINE_AMP  = float(sys.argv[5])  if len(sys.argv) > 5 else 0.6     # 0 = fixed co
 SINE_HZ   = 1.0
 
 MENU_MODE = 0
-MIT_MODE  = 5
+MIT_MODE  = 2
 
 P_MIN, P_MAX = -12.5,  12.5
 V_MIN, V_MAX = -45.0,  45.0

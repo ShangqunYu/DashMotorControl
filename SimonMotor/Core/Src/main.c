@@ -141,6 +141,8 @@ int main(void)
   if(isnan(P_MIN)){P_MIN = -12.57f;}
   if(isnan(V_MAX)){V_MAX = 65.0f;}
   if(isnan(V_MIN)){V_MIN = -65.0f;}
+  if(isnan(E_ZERO_RAD)){E_ZERO_RAD = 0.0f;}
+  if(isnan(M_ZERO_RAD)){M_ZERO_RAD = 0.0f;}
   
   /* USER CODE END Init */
 
@@ -179,11 +181,8 @@ int main(void)
 
   /* FOC sensor init — must come before MA732 start so the LUT is active
      from the very first SPI callback */
-  foc_sensor_init(&hfoc,
-      (CALIBRATION_DONE_FLAG == 1) ? E_ZERO_RAD        : 0.0f,
-      (CALIBRATION_DONE_FLAG == 1 && PHASE_ORDER == 1) ? REVERSE_DIR : NORMAL_DIR);
+  foc_sensor_init(&hfoc);
   if (CALIBRATION_DONE_FLAG == 1) {
-    hfoc.angle_sensor.m_zero     = isnan(M_ZERO_RAD) ? 0.0f : M_ZERO_RAD;
     hfoc.angle_sensor.pole_pairs = (uint8_t)PPAIRS;
     memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
            sizeof(hfoc.angle_sensor.encd_error_comp));
@@ -224,24 +223,12 @@ int main(void)
   pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
   pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
 
-
   pid_reset(&hfoc.iq_ctrl);
   pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
   pid_set_kp(&hfoc.iq_ctrl, 0.05f);
   pid_set_ki(&hfoc.iq_ctrl, 200.0f);
   pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
   pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
-
-  // Speed PID parameter
-  pid_reset(&hfoc.speed_ctrl);
-  pid_set_ts(&hfoc.speed_ctrl, SPEED_TS);
-  pid_set_kp(&hfoc.speed_ctrl, 0.01f);
-  pid_set_ki(&hfoc.speed_ctrl, 0.1f);
-  pid_set_kd(&hfoc.speed_ctrl, 0.0001f);
-  pid_set_d_filter_fc(&hfoc.speed_ctrl, 100.0f);
-  pid_set_max_d(&hfoc.speed_ctrl, 10.0f);
-  pid_set_max_out(&hfoc.speed_ctrl, 10.0f);
-  pid_set_deadband(&hfoc.speed_ctrl, 0.01f);
 
   	// current sensor
   hfsm.curr_state = MENU_MODE;

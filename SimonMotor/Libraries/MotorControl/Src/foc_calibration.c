@@ -25,7 +25,6 @@
 #include <math.h>
 #include <stdio.h>
 
-#define N_DETECT_ELECTRIC_CYCLE 20
 
 // Drive id=I_CAL, iq=0 at a forced electrical angle — used during calibration
 // sweeps so the PI loop regulates current instead of applying raw voltage.
@@ -38,15 +37,12 @@ static void cal_force_current(foc_t *hfoc, float angle_rad) {
 
 void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal) {
 
-    hfoc->angle_sensor.e_zero     = 0.0f;
-    hfoc->angle_sensor.lut_ready  = 0;
-    hfoc->angle_sensor.sensor_dir = NORMAL_DIR;
-
-    hcal->detected_ppairs  = 0;
+    hfoc->angle_sensor.e_zero               = 0.0f;
+    hfoc->angle_sensor.sensor_dir           = NORMAL_DIR;
     hcal->num_measurements_to_take_for_lut  = 0;
-    hcal->cal_state        = CAL_STATE_PHASE_SETTLING;
-    hcal->cal_start_time   = HAL_GetTick();
-
+    hfoc->angle_sensor.lut_ready            = 0;
+    hcal->cal_state                         = CAL_STATE_PHASE_SETTLING;
+    hcal->cal_start_time                    = HAL_GetTick();
     printf("Calibration started: settling...\r\n");
 }
 
@@ -84,13 +80,11 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal) {
             printf("Phase detection: total_mech=%.4f rad over %d e-cycles\r\n",
                    delta, N_DETECT_ELECTRIC_CYCLE);
 
-            uint8_t ppairs = (uint8_t)roundf((float)N_DETECT_ELECTRIC_CYCLE * TWO_PI / fabsf(delta));
+            hfoc->angle_sensor.pole_pairs = (uint8_t)roundf((float)N_DETECT_ELECTRIC_CYCLE * TWO_PI / fabsf(delta));
 
-            hcal->detected_ppairs         = ppairs;
-            hcal->num_measurements_to_take_for_lut         = (uint16_t)((uint32_t)ppairs * LUT_SAMPLES_PER_PPAIR);
-            hfoc->angle_sensor.pole_pairs = ppairs;
-            PPAIRS = (float)ppairs;
-            printf("Detected %d pole pairs\r\n", ppairs);
+            hcal->num_measurements_to_take_for_lut         = (uint16_t)((uint32_t)hfoc->angle_sensor.pole_pairs * LUT_SAMPLES_PER_PPAIR);
+
+            printf("Detected %d pole pairs\r\n", hfoc->angle_sensor.pole_pairs);
 
             if (delta < 0.0f) {
                 hfoc->angle_sensor.sensor_dir = REVERSE_DIR;
@@ -99,7 +93,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal) {
                 hfoc->angle_sensor.sensor_dir = NORMAL_DIR;
                 printf("Phase order: normal\r\n");
             }
-            PHASE_ORDER = hfoc->angle_sensor.sensor_dir;
+
             // Re-settle at e=0 before the LUT sweep
             hcal->cal_start_time = HAL_GetTick();
             hcal->cal_state      = CAL_STATE_LUT_SETTLING;
