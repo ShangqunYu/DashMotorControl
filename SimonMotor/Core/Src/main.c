@@ -68,8 +68,8 @@ PreferenceWriter prefs;
 DRVStruct drv;
 foc_t hfoc;
 CalStruct hcal;
-CANTxMessage can_tx;
-CANRxMessage can_rx;
+// CANTxMessage can_tx;
+// CANRxMessage can_rx;
 FSMStruct hfsm;
 
 /* FOC loop timing instrumentation (DWT cycle counter) */
@@ -171,8 +171,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* CAN setup */
-  can_rx_init(&can_rx);
-  can_tx_init(&can_tx);
+  init_can_rx_filter();
+  can_tx_init();
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
@@ -181,16 +181,7 @@ int main(void)
 
   /* FOC sensor init — must come before MA732 start so the LUT is active
      from the very first SPI callback */
-  foc_sensor_init(&hfoc);
-  if (CALIBRATION_DONE_FLAG == 1) {
-    hfoc.angle_sensor.pole_pairs = (uint8_t)PPAIRS;
-    memcpy(hfoc.angle_sensor.encd_error_comp, &ENCODER_LUT,
-           sizeof(hfoc.angle_sensor.encd_error_comp));
-    hfoc.angle_sensor.lut_ready = 1;
-    printf("Encoder cal loaded: e_zero=%.4f, ppairs=%d, dir=%s\r\n",
-           hfoc.angle_sensor.e_zero, hfoc.angle_sensor.pole_pairs,
-           (hfoc.angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
-  }
+  hfoc.angle_sensor = angle_sensor_init();
 
     // if using external encoder, set cs pin high for the internal one to disable it and avoid interference
   if(USE_EXTERNAL_ENCODER){
@@ -322,14 +313,6 @@ void SystemClock_Config(void)
   }
 }
 
-/* USER CODE BEGIN 4 */
-// CAN RX is now handled entirely in CAN1_RX0_IRQHandler (stm32f4xx_it.c).
-// Protocol: CAN_ID, 8 bytes.
-//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFC  → enter torque control (MOTOR_CMD)
-//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFD  → return to menu      (MENU_CMD)
-//   0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFE  → set mechanical zero  (ZERO_CMD)
-//   otherwise                                → MIT pos/vel/kp/kd command
-// Reply: 6 bytes, position/velocity/current packed as int16.
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {

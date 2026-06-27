@@ -229,35 +229,7 @@ void CAN1_RX0_IRQHandler(void)
   HAL_CAN_IRQHandler(&hcan1);
   /* USER CODE BEGIN CAN1_RX0_IRQn 1 */
 
-  HAL_CAN_GetRxMessage(&CAN_H, CAN_RX_FIFO0, &can_rx.rx_header, can_rx.data);
 
-  /* Send reply: can_id, position (rad), velocity (rad/s), estimated torque (N-m), vbus (V), motor temp (C) */
-  pack_reply(&can_tx, CAN_ID, hfoc.angle_sensor.mech_angle_rad, hfoc.angle_sensor.mech_angle_vel, hfoc.iq*KT*GR, hfoc.v_bus, hfoc.motor_temp);
-  uint32_t tx_mailbox;
-  HAL_CAN_AddTxMessage(&CAN_H, &can_tx.tx_header, can_tx.data, &tx_mailbox);
-
-
-  /* Special commands: first 7 bytes all 0xFF, last byte selects command */
-  if (can_rx.data[0] == 0xFF && can_rx.data[1] == 0xFF && can_rx.data[2] == 0xFF && can_rx.data[3] == 0xFF &&
-      can_rx.data[4] == 0xFF && can_rx.data[5] == 0xFF && can_rx.data[6] == 0xFF) {
-    switch (can_rx.data[7]) {
-      case MIT_MODE: update_fsm(&hfsm, MOTOR_CMD); break;  /* enter torque control */
-      case MENU_MODE: update_fsm(&hfsm, MENU_CMD);  break;  /* return to menu / disable */
-      case SET_ZERO_MODE: update_fsm(&hfsm, ZERO_CMD);  break;  /* set mechanical zero */
-      case CALIBRATION_MODE: update_fsm(&hfsm, CAL_CMD); break;  /* enter calibration mode */
-      case ENCODER_MODE: update_fsm(&hfsm, ENCODER_CMD); break;  /* enter encoder display mode */
-      case R_MEAS_MODE: update_fsm(&hfsm, R_MEAS_CMD); break;  /* enter R measurement mode */
-      case L_MEAS_MODE: update_fsm(&hfsm, L_MEAS_CMD); break;  /* enter L measurement mode */
-      default:   break;
-    }
-    return;
-  }
-
-  /* Regular MIT position/velocity/gain command */
-  if (can_rx.rx_header.DLC == 8) {
-    unpack_cmd(can_rx, (float *)hfoc.mit_buf.commands);
-    hfoc.new_cmd = 1;
-  }
 
   /* USER CODE END CAN1_RX0_IRQn 1 */
 }

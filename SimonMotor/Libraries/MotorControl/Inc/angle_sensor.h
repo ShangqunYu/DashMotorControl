@@ -61,10 +61,8 @@ typedef struct {
 /* ── Public API ──────────────────────────────────────────────────────────── */
 
 // Initialise scalar fields; MA732 must be configured separately via MA732_config().
-void angle_sensor_init(AngleSensor_t *sensor,
-                       uint8_t        pole_pairs,
-                       float          e_zero_rad,
-                       dir_mode_t     sensor_dir);
+AngleSensor_t angle_sensor_init();
+
 
 // Copy a processed correction LUT into the sensor and mark it active.
 // Call this from the main loop after foc_cal_lut_postprocess() finishes.

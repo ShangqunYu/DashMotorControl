@@ -43,20 +43,17 @@ void MX_CAN1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 typedef struct{
-	uint8_t id;
 	uint8_t data[8];
 	CAN_RxHeaderTypeDef rx_header;
-	CAN_FilterTypeDef filter;
 }CANRxMessage ;
 
 typedef struct{
-	uint8_t id;
 	uint8_t data[8];
 	CAN_TxHeaderTypeDef tx_header;
 }CANTxMessage ;
 
-void can_rx_init(CANRxMessage *msg);
-void can_tx_init(CANTxMessage *msg);
+void init_can_rx_filter();
+void can_tx_init();
 void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb, float temp);
 void unpack_cmd(CANRxMessage msg, float *commands);
 /* USER CODE END Prototypes */

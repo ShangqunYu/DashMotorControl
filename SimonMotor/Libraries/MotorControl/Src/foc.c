@@ -21,11 +21,6 @@ void foc_zero_commands(foc_t *hfoc) {
     hfoc->mit_cmd.v_des = 0;
 }
 
-void foc_sensor_init(foc_t *hfoc) {
-	hfoc->angle_sensor.e_zero = E_ZERO_RAD;
-    hfoc->angle_sensor.m_zero = M_ZERO_RAD;
-	hfoc->angle_sensor.sensor_dir = PHASE_ORDER;
-}
 
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim) {
 	hfoc->pwm_resolution = __HAL_TIM_GET_AUTORELOAD(htim);

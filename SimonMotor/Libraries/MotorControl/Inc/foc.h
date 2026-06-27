@@ -73,7 +73,6 @@ void foc_zero_commands(foc_t *hfoc);
 void foc_set_limit_current(foc_t *hfoc, float i_limit);
 void foc_r_meas_update(foc_t *hfoc);
 void foc_l_meas_update(foc_t *hfoc);
-void foc_sensor_init(foc_t *hfoc);
 void foc_timer_init(foc_t *hfoc, TIM_HandleTypeDef *htim);
 void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w);
 void abc(float sf, float cf, float d, float q, float *a, float *b, float *c);
