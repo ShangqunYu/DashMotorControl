@@ -53,7 +53,7 @@ typedef struct{
 }CANTxMessage ;
 
 void init_can_rx_filter();
-void can_tx_init();
+// void can_tx_init();
 void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb, float temp);
 void unpack_cmd(CANRxMessage msg, float *commands);
 /* USER CODE END Prototypes */

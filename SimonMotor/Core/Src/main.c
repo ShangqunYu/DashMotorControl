@@ -172,7 +172,6 @@ int main(void)
 
   /* CAN setup */
   init_can_rx_filter();
-  can_tx_init();
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 

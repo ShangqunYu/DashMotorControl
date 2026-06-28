@@ -11,29 +11,7 @@
 #include <math.h>     /* floorf, fabsf */
 #include <stdio.h>
 
-// void angle_sensor_init(AngleSensor_t *sensor,
-//                        uint8_t        pole_pairs,
-//                        float          e_zero_rad,
-//                        dir_mode_t     sensor_dir)
-// {
-//     if (sensor == NULL) return;
 
-//     sensor->pole_pairs       = pole_pairs;
-//     sensor->e_zero           = e_zero_rad;
-//     sensor->m_zero           = 0.0f;
-//     sensor->sensor_dir       = sensor_dir;
-//     sensor->s_rotor_rad      = 0.0f;
-//     sensor->s_rotor_rad_raw  = 0.0f;
-//     sensor->e_rad            = 0.0f;
-//     sensor->rotor_vel  = 0.0f;
-//     sensor->pos_hat    = 0.0f;
-//     sensor->vel_hat    = 0.0f;
-//     sensor->obs_ready  = 0U;
-//     sensor->lut_ready        = 0U;
-//     sensor->turns            = 0;
-//     sensor->first_sample     = 0;
-//     sensor->multi_rotor_rad  = 0.0f;
-// }
 
 AngleSensor_t angle_sensor_init() {
     AngleSensor_t angle_sensor;
