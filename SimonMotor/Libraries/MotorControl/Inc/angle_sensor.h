@@ -13,8 +13,12 @@
 #define ANGLE_SENSOR_INC_ANGLE_SENSOR_H_
 
 #include <stdint.h>
-#include "MA732.h"
+#include "stm32f4xx_hal.h"
 #include "hw_config.h"  
+
+
+
+float MA732_get_rad();
 
 
 /* ── Sensor direction ────────────────────────────────────────────────────── */
@@ -34,8 +38,8 @@ typedef enum {
 
 /* ── Angle / velocity state ──────────────────────────────────────────────── */
 typedef struct {
-    MA732_t ma732;
 
+    float raw_rad;           // raw radiance right from the encoder reading
     float s_rotor_rad;       // user position single turn (LUT-corrected, relative to m_zero)
     float s_rotor_rad_raw;   // user position before LUT correction (same reference, for comparison)
     float multi_rotor_rad;   // multiturn mechanical angle (LUT-corrected, relative to m_zero)
@@ -71,9 +75,12 @@ void angle_sensor_load_lut(AngleSensor_t *sensor,
                            const float   *lut,
                            uint16_t       lut_size);
 
-// Compute mechanical + electrical angles from the latest MA732 reading.
-// Call from the SPI-complete ISR (HAL_SPI_TxRxCpltCallback).
+
+// update the angle sensor related data.
 void angle_sensor_update(AngleSensor_t *sensor);
+
+// Compute mechanical + electrical angles from the MA732 reading via polling.
+void angle_sensor_update_position(AngleSensor_t *sensor);
 
 // Compute mechanical velocity in rad/s from the delta of s_rotor_rad.
 // Call once per FOC cycle (Ts = FOC sample period in seconds).
@@ -82,5 +89,10 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor);
 // Capture the current position as the mechanical zero.
 // After this call s_rotor_rad == 0; save m_zero to flash from the main loop.
 void angle_sensor_set_m_zero(AngleSensor_t *sensor);
+
+
+
+
+
 
 #endif /* ANGLE_SENSOR_INC_ANGLE_SENSOR_H_ */

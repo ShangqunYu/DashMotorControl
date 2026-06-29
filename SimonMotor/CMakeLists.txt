@@ -44,13 +44,11 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    Libraries/MotorControl/Src/math_ops.c
     Libraries/MotorControl/Src/preference_writer.c
     Libraries/MotorControl/Src/stm32f4xx_flash.c
     Libraries/MotorControl/Src/flash_writer.c
     Libraries/MotorControl/Src/drv8353.c
-    Libraries/MotorControl/Src/MA732.c
-    Libraries/MotorControl/Src/FOC_math.c
+    Libraries/MotorControl/Src/math_utils.c
     Libraries/MotorControl/Src/foc.c
     Libraries/MotorControl/Src/foc_calibration.c
     Libraries/MotorControl/Src/angle_sensor.c

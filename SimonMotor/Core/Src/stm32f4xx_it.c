@@ -28,7 +28,6 @@
 #include "user_config.h"
 #include "foc.h"
 #include "fsm.h"
-#include "math_ops.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

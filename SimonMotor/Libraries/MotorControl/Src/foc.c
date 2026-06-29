@@ -43,14 +43,38 @@ void svm(float v_max, float u, float v, float w,
          float *dtc_u, float *dtc_v, float *dtc_w) {
     float v_offset = (fminf(fminf(u, v), w) + fmaxf(fmaxf(u, v), w)) * 0.5f;
     float v_mid    = 0.5f * (DTC_MAX + DTC_MIN);
-    // *dtc_u = CONSTRAIN(0.5f * (u - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
-    // *dtc_v = CONSTRAIN(0.5f * (v - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
-    // *dtc_w = CONSTRAIN(0.5f * (w - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    // *dtc_u = constrain(0.5f * (u - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    // *dtc_v = constrain(0.5f * (v - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
+    // *dtc_w = constrain(0.5f * (w - v_offset) * OVERMODULATION / v_max + v_mid, DTC_MIN, DTC_MAX);
     float scale    = 0.5f * OVERMODULATION / v_max;  // one division, three multiplies
-    *dtc_u = CONSTRAIN((u - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
-    *dtc_v = CONSTRAIN((v - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
-    *dtc_w = CONSTRAIN((w - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
+    *dtc_u = constrain((u - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
+    *dtc_v = constrain((v - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
+    *dtc_w = constrain((w - v_offset) * scale + v_mid, DTC_MIN, DTC_MAX);
 }
+
+void clarke_transform(float ia, float ib, float *i_alpha, float *i_beta) {
+    // Clarke transform
+    *i_alpha = ia;
+    *i_beta  = ONE_BY_SQRT3 * ia + TWO_BY_SQRT3 * ib;
+}
+
+void park_transform(float i_alpha, float i_beta, float sin_theta, float cos_theta, float *id, float *iq) {
+    // Park transform
+    *id = i_alpha * cos_theta + i_beta * sin_theta;
+    *iq = i_beta * cos_theta - i_alpha * sin_theta;
+}
+
+// Fast combined Clarke + Park Transform
+void clarke_park_transform(float ia, float ib, float sin_theta, float cos_theta, float *id, float *iq) {
+    // Clarke transform
+    float i_alpha = ia;
+    float i_beta  = ONE_BY_SQRT3 * ia + TWO_BY_SQRT3 * ib;
+
+    // Park transform
+    *id = i_alpha * cos_theta + i_beta * sin_theta;
+    *iq = i_beta * cos_theta - i_alpha * sin_theta;
+}
+
 
 void foc_set_limit_current(foc_t *hfoc, float i_limit) {
 	hfoc->max_current = i_limit;
@@ -64,19 +88,9 @@ void foc_mit_control_update(foc_t *hfoc){
     float torque_des = hfoc->mit_cmd.kp * pos_error + hfoc->mit_cmd.kd * vel_error + hfoc->mit_cmd.t_ff;
     hfoc->iq_ref = torque_des * (1.0f / (KT*GR));
     // Cap iq_ref for safety
-    hfoc->iq_ref = CONSTRAIN(hfoc->iq_ref, -hfoc->max_current, hfoc->max_current);
+    hfoc->iq_ref = constrain(hfoc->iq_ref, -hfoc->max_current, hfoc->max_current);
 }
 
-void foc_update_velocity(foc_t *hfoc) {
-    // Compute mechanical velocity in rad/s from LUT-corrected angle delta
-    angle_sensor_update_velocity(&hfoc->angle_sensor);
-
-    // Restart SPI read if data is ready
-    if (MA732_get_val_flag()) {
-        MA732_reset_val_flag();
-        MA732_start(&hfoc->angle_sensor.ma732);
-    }
-}
 
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad) {
     float sin_theta, cos_theta;
@@ -247,8 +261,8 @@ void foc_current_control_update(foc_t *hfoc) {
 
 
     // Hard limit references
-    id_ref = CONSTRAIN(id_ref, -hfoc->max_current, hfoc->max_current);
-    iq_ref = CONSTRAIN(iq_ref, -hfoc->max_current, hfoc->max_current);
+    id_ref = constrain(id_ref, -hfoc->max_current, hfoc->max_current);
+    iq_ref = constrain(iq_ref, -hfoc->max_current, hfoc->max_current);
 
     // pre calculate sin & cos
     pre_calc_sin_cos(hfoc->angle_sensor.e_rad, &sin_theta, &cos_theta);

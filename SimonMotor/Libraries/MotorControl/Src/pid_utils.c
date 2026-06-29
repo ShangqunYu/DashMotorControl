@@ -6,10 +6,7 @@
  */
 
 #include "pid_utils.h"
-
-#ifndef TWO_PI
-#define TWO_PI 6.2831853f
-#endif
+#include "math_utils.h"
 
 float pi_control(PID_Controller_t *pi, float error) {
     if (error >= -pi->e_deadband && error <= pi->e_deadband) {

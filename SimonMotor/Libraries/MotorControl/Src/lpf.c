@@ -1,5 +1,5 @@
 #include "lpf.h"
-#include "FOC_math.h"
+#include "math_utils.h"
 #include "math.h"
 
 void second_order_lpf_init(SecondOrderLPF* lpf, float cutoff_freq, float sampling_freq) {

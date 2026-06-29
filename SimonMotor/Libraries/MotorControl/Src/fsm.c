@@ -12,7 +12,6 @@
 #include "analog_sensor.h"
 #include "angle_sensor.h"
 #include "drv8353.h"
-#include "math_ops.h"
 #include "user_config.h"
 #include "hw_config.h"
 #include "usart.h"
@@ -34,7 +33,7 @@ void run_fsm(FSMStruct *fsmstate)
 {
     /* 1. Per-cycle pre-processing ----------------------------------------- */
     update_power_voltage(&hfoc.v_bus);
-    foc_update_velocity(&hfoc);
+    angle_sensor_update(&hfoc.angle_sensor);
 
     /* 2. Apply pending MIT parameters (not a mode change) ----------------- */
     if (hfoc.new_cmd) {

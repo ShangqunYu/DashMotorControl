@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include "pid_utils.h"
 #include "lpf.h"
-#include "FOC_math.h"
+#include "math_utils.h"
 #include "hw_config.h"
 #include "angle_sensor.h"      /* AngleSensor_t, dir_mode_t */
 #include "analog_sensor.h"     /* CurrentSensor */
@@ -78,7 +78,9 @@ void foc_set_pwm_dtc(foc_t *hfoc, float dtc_u, float dtc_v, float dtc_w);
 void abc(float sf, float cf, float d, float q, float *a, float *b, float *c);
 void svm(float v_max, float u, float v, float w,
          float *dtc_u, float *dtc_v, float *dtc_w);
-void foc_update_velocity(foc_t *hfoc);
+void clarke_transform(float ia, float ib, float *i_alpha, float *i_beta);
+void park_transform(float i_alpha, float i_beta, float sin_theta, float cos_theta, float *id, float *iq);
+void clarke_park_transform(float ia, float ib, float sin_theta, float cos_theta, float *id, float *iq);
 void foc_mit_control_update(foc_t *hfoc);
 void open_loop_voltage_control(foc_t *hfoc, float vd_ref, float vq_ref, float angle_rad);
 void foc_current_control_update(foc_t *hfoc);

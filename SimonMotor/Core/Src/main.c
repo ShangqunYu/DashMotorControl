@@ -29,9 +29,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
 #include "hw_config.h"
 #include "user_config.h"
-#include "math_ops.h"
 #include "stm32f4xx_flash.h"
 #include "flash_writer.h"
 #include "preference_writer.h"
@@ -78,11 +78,6 @@ volatile uint32_t foc_loop_cycles_max = 0;
 volatile uint32_t foc_loop_cycles_sum = 0;
 volatile uint32_t foc_loop_cycles_count = 0;
 
-/* angle_sensor_update timing instrumentation (DWT cycle counter) */
-volatile uint32_t angle_sensor_cycles_min = 0xFFFFFFFFu;
-volatile uint32_t angle_sensor_cycles_max = 0;
-volatile uint32_t angle_sensor_cycles_sum = 0;
-volatile uint32_t angle_sensor_cycles_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -182,16 +177,6 @@ int main(void)
      from the very first SPI callback */
   hfoc.angle_sensor = angle_sensor_init();
 
-    // if using external encoder, set cs pin high for the internal one to disable it and avoid interference
-  if(USE_EXTERNAL_ENCODER){
-    HAL_GPIO_WritePin(ENC_CS_INT, GPIO_PIN_SET);
-  }
-  /* MA732 setup */
-  MA732_config(&hfoc.angle_sensor.ma732, &ENC_SPI);
-  for (int i=0; i<20; i++) {
-    MA732_start(&hfoc.angle_sensor.ma732);
-    HAL_Delay(10);
-  }
 
   /* Turn on PWM */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -312,20 +297,6 @@ void SystemClock_Config(void)
   }
 }
 
-
-void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
-{
-  if (hspi->Instance == ENC_SPI.Instance)
-  {
-    uint32_t cyc_start = DWT->CYCCNT;
-    angle_sensor_update(&hfoc.angle_sensor);
-    uint32_t cycles = DWT->CYCCNT - cyc_start;
-    if (cycles < angle_sensor_cycles_min) angle_sensor_cycles_min = cycles;
-    if (cycles > angle_sensor_cycles_max) angle_sensor_cycles_max = cycles;
-    angle_sensor_cycles_sum += cycles;
-    angle_sensor_cycles_count++;
-  }
-}
 
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {

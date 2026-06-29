@@ -124,7 +124,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal) {
         if (hcal->lut_theta_ref >= hcal->lut_next_sample_e_rad) {
             uint16_t idx = hcal->curr_measurement_index;
             float ideal_rotor_angle_radians  = (float)idx * TWO_PI / (float)hcal->num_measurements_to_take_for_lut;
-            float err    = hfoc->angle_sensor.ma732.angle_raw - ideal_rotor_angle_radians;
+            float err    = hfoc->angle_sensor.raw_rad - ideal_rotor_angle_radians;
             while (err >  PI) err -= TWO_PI;
             while (err < -PI) err += TWO_PI;
             hcal->all_measurements_for_lookup_table[idx] = err;
@@ -149,7 +149,7 @@ void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal) {
         if (hcal->lut_theta_ref <= hcal->lut_next_sample_e_rad) {
             uint16_t idx = hcal->curr_measurement_index;
             float ideal  = (float)idx * TWO_PI / (float)hcal->num_measurements_to_take_for_lut;
-            float err    = hfoc->angle_sensor.ma732.angle_raw - ideal;
+            float err    = hfoc->angle_sensor.raw_rad - ideal;
             while (err >  PI) err -= TWO_PI;
             while (err < -PI) err += TWO_PI;
             hcal->all_measurements_for_lookup_table[idx] = (hcal->all_measurements_for_lookup_table[idx] + err) * 0.5f;

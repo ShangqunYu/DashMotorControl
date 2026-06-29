@@ -22,7 +22,6 @@
 
 /* USER CODE BEGIN 0 */
 #include <stdbool.h>
-#include "math_ops.h"
 #include "hw_config.h"
 #include "user_config.h"
 #include "foc.h"

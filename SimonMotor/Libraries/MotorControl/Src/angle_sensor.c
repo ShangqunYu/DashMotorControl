@@ -3,13 +3,134 @@
  */
 
 #include "angle_sensor.h"
-#include "FOC_math.h"
+#include "math_utils.h"
 #include "hw_config.h"
-#include "math_ops.h"
 #include "user_config.h"
+#include <stdint.h>
 #include <string.h>   /* memcpy */
 #include <math.h>     /* floorf, fabsf */
 #include <stdio.h>
+#include "spi.h"
+
+// // "Member Variables"
+// // https://stackoverflow.com/questions/7259830/why-and-when-to-use-static-structures-in-c-programming
+// static uint16_t rawBitsFromSPI;
+// static float rotorTurnsPerElectricalCycle;
+// static float electricalCyclesPerRotorTurn;
+// static float rotorTurnsWhenElectricalAngleIsZero;
+// static int rotorFullTurnCount;
+
+
+// static const float radiansPerTurn = 2 * M_PI;
+// static const float turnsPerRadian = 1.0 / radiansPerTurn;
+// static const float degreesPerTurn = 360;
+// static const float turnsPerDegree = 1.0 / degreesPerTurn;
+
+
+
+// void angle_sensor_init_TEST() {
+//     rawBitsFromSPI = 0;
+//     rotorTurnsPerElectricalCycle = 1;
+//     electricalCyclesPerRotorTurn = 1;
+//     rotorTurnsWhenElectricalAngleIsZero = 0;
+//     rotorFullTurnCount = 0;
+// }
+
+// // Gives angles restricted to the range [0, 1]
+// float get_absolute_rotor_angle_turns() {
+//     return 0;
+// }
+// float get_absolute_rotor_angle_radians() {
+//     return radiansPerTurn * get_absolute_rotor_angle_turns();
+// }
+// float get_absolute_rotor_angle_degrees() {
+//     return degreesPerTurn * get_absolute_rotor_angle_turns();
+// }
+
+// float rotor_turns_to_electrical_turns(float rotorTurns) {
+
+// }
+
+// float get_absolute_electrical_angle_turns() {
+//     // Before scaling the rotor angle by [electricalCyclesPerRotorTurn],
+//     // we must account for the fact that rotorZero and electricalZero
+//     // aren't guaranteed to line up with one another.
+//     // TODO: Add details explaining how the rotor angle coordinate system depends on arbitrary encoder magnet installation,
+//     //       whereas the electrical angle coordinate system depends on how the rotor magnets are positioned relative to the stator coils.
+//     //       Be sure to emphasize that "rotor magnets" aren't the same as "encoder magnet" despite both being on the rotor.
+//     //       "encoder manget" is used for measuring the rotor angle, "rotor magnets" are used for pushing on / spinning the rotor.
+//     float rotorTurns_awayFromElectricalZero = get_absolute_rotor_angle_turns() - rotorTurnsWhenElectricalAngleIsZero; // This is the displacement from "electrical zero", measured in units of "rotor turns"
+//     float electricalTurns_awayFromElectricalZero = rotorTurns_awayFromElectricalZero * electricalCyclesPerRotorTurn;                                  // Now take that displacement, and convert it into units of "electrical turns"
+
+//     // Between the shift and the scaling, the value of [scaled] has likely been pushed outside
+//     // of the range [0, 1], so we wrap it around to the equivalent angle in that range.
+//     return circular_clamp(electricalTurns_awayFromElectricalZero, 0, 1);
+// }
+
+// float get_absolute_electrical_angle_radians() {
+//     return radiansPerTurn * get_absolute_electrical_angle_turns();
+// }
+
+// float get_absolute_electrical_angle_degrees() {
+//     return degreesPerTurn * get_absolute_electrical_angle_turns();
+// }
+
+
+
+// // Intended for wrapping angles to a restricted range, while preserving the "direction" the angle points in.
+// // TODO: Better docs?
+// static float circular_clamp(float wrapMe, float inclusiveMin, float exclusiveMax) {
+//     // The easiest way to implement this function (in terms of understanding) is probably:
+//     //   float distanceBetweenEquivalentValues =  exclusiveMax - inclusiveMin;
+//     //   while (wrapMe <  min) { wrapMe += distanceBetweenEquivalentValues; }
+//     //   while (wrapMe >= max) { wrapMe -= distanceBetweenEquivalentValues; }
+//     //   return wrapMe;
+//     //
+//     // However, you hopefully get the feeling that there's a way to just calculate the answer
+//     // directly instead of looping until you're in the desired range, which is what we do below.
+
+//     // 1) Find the number that we're allowed to add or subtract from "wrapMe" without
+//     //    changing its effective value.
+//     //    (e.g. when wrapping angles measured in degrees, this value is 360. Adding or subtracting
+//     //     360 to any given angle results in an angle pointing in the same direction as the original.)
+//     float distanceBetweenEquivalentValues = exclusiveMax - inclusiveMin;
+
+//     // 2) Find the "t" value for if "wrapMe" had been obtained by
+//     //    linearly interpolating between the min and the max.
+//     float t = (wrapMe - inclusiveMin) / distanceBetweenEquivalentValues;
+
+//     // 3) Use the non-fractional part of "t" (i.e. the part that's before the decimal place) to calculate the "index"
+//     //    of the current range. For example, if we're clamping to the range 0 to 360, then:
+//     //
+//     //      [0-360) has index 0
+//     //      [360-720) has index 1
+//     //      [720-1080) has index 2
+//     //      [-360-0) has index -1
+//     //      [-720-360) has index -2, etc.
+//     float indexOfCurrentRange = floorf(t);
+//     // Note: You need to use Math.floor() here as opposed to just casting to int. This is because casting
+//     //       to int always rounds towards 0, whereas the floor of a negative number rounds away from 0.
+//     //       See: https://www.desmos.com/calculator/pnmjpb1whn
+
+//     // 4) Get the final result by subtracting the appropriate amount of
+//     //    full ranges from the given number.
+//     return wrapMe - (distanceBetweenEquivalentValues * indexOfCurrentRange);
+// }
+
+
+float MA732_get_rad(){
+    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_RESET);
+    uint8_t spi_tx_buffer[] = {0,0};
+    uint8_t spi_rx_buffer[2];
+    HAL_SPI_TransmitReceive(&ENC_SPI, (uint8_t*)spi_tx_buffer, (uint8_t *)spi_rx_buffer, 1, 1000);
+    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
+    const uint16_t raw_data = ((uint16_t)spi_rx_buffer[1] << 8) | spi_rx_buffer[0];
+    float angle_scale_factor = 0.00038349519824f;   // 2π / 16384 (14-bit)
+    float angle_raw = (float)(raw_data >> 2) * angle_scale_factor;
+    return angle_raw;
+}
+
+
 
 
 
@@ -40,7 +161,19 @@ AngleSensor_t angle_sensor_init() {
     angle_sensor.vel_hat        = 0;
     angle_sensor.obs_ready      = 0;
 
+    // if using external encoder, set cs pin high for the internal one to disable it and avoid interference
+    if(USE_EXTERNAL_ENCODER){
+        HAL_GPIO_WritePin(ENC_CS_INT, GPIO_PIN_SET);
+    }
 
+    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
+
+      /* MA732 setup */
+    for (int i=0; i<20; i++) {
+        // MA732_start(&hfoc.angle_sensor.ma732);
+        MA732_get_rad();
+        HAL_Delay(10);
+    }
     return angle_sensor;
 }
 
@@ -59,12 +192,32 @@ void angle_sensor_load_lut(AngleSensor_t *sensor,
 
 void angle_sensor_update(AngleSensor_t *sensor)
 {
+    angle_sensor_update_position(sensor);
+    angle_sensor_update_velocity(sensor);
+}
 
-    float raw_rad = MA732_get_rad(&sensor->ma732);
+void angle_sensor_set_m_zero(AngleSensor_t *sensor)
+{
+    /*
+     * To make the current position to be the new mechanical zero
+     * We know that s_rotor_rad = angle_from_ezero - m_zero
+     * m_zero := m_zero + s_rotor_rad = m_zero + angle_from_ezero - m_zero = angle_from_ezero
+    */
+    sensor->m_zero += sensor->s_rotor_rad;
+    norm_angle_rad(&sensor->m_zero);
+    sensor->s_rotor_rad      = 0.0f;
+    sensor->s_rotor_rad_raw  = 0.0f;
+    sensor->turns            = 0;
+    sensor->multi_rotor_rad  = 0.0f;
+    sensor->mech_angle_rad   = 0.0f;
+}
+
+void angle_sensor_update_position(AngleSensor_t *sensor) {
+    sensor->raw_rad = MA732_get_rad();
     float old_s_angle = sensor->s_rotor_rad;
 
     // Angle referenced to electrical zero — used for LUT lookup and e_angle
-    float angle_from_ezero = raw_rad - sensor->e_zero;
+    float angle_from_ezero = sensor->raw_rad - sensor->e_zero;
     norm_angle_rad(&angle_from_ezero);
 
     // Raw user position (before LUT correction, for comparison in ENCODER_MODE)
@@ -112,24 +265,6 @@ void angle_sensor_update(AngleSensor_t *sensor)
     }
     norm_angle_rad(&e_rad);
     sensor->e_rad = e_rad;
-
-    MA732_set_val_flag();
-}
-
-void angle_sensor_set_m_zero(AngleSensor_t *sensor)
-{
-    /*
-     * To make the current position to be the new mechanical zero
-     * We know that s_rotor_rad = angle_from_ezero - m_zero
-     * m_zero := m_zero + s_rotor_rad = m_zero + angle_from_ezero - m_zero = angle_from_ezero
-    */
-    sensor->m_zero += sensor->s_rotor_rad;
-    norm_angle_rad(&sensor->m_zero);
-    sensor->s_rotor_rad      = 0.0f;
-    sensor->s_rotor_rad_raw  = 0.0f;
-    sensor->turns            = 0;
-    sensor->multi_rotor_rad  = 0.0f;
-    sensor->mech_angle_rad   = 0.0f;
 }
 
 void angle_sensor_update_velocity(AngleSensor_t *sensor)
