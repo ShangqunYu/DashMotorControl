@@ -177,7 +177,7 @@ int main(void)
   /* FOC sensor init — must come before MA732 start so the LUT is active
      from the very first SPI callback */
   motor.angle_sensor        = angle_sensor_init();
-  motor.pending_fsm_cmd     = NO_PENDING_MODE;
+  motor.cmd.pending_fsm_cmd = NO_PENDING_MODE;
 
 
   /* Turn on PWM */

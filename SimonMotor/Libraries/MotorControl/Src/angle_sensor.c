@@ -30,19 +30,18 @@ AngleSensor_t angle_sensor_init() {
 	angle_sensor.e_zero = E_ZERO_RAD;
     angle_sensor.m_zero = M_ZERO_RAD;
 	angle_sensor.sensor_dir = PHASE_ORDER;
-    angle_sensor.pole_pairs = (uint8_t)PPAIRS;
+    angle_sensor.pole_pairs      = (uint8_t)PPAIRS;
+    angle_sensor.mech_angle_rad  = 0;
+    angle_sensor.mech_angle_vel  = 0;
+    angle_sensor.e_rad           = 0;
+    angle_sensor.first_sample    = 0;
+    angle_sensor.lut_ready       = 0;
     if (CALIBRATION_DONE_FLAG == 1) {
-        memcpy(angle_sensor.encd_error_comp, &ENCODER_LUT, sizeof(angle_sensor.encd_error_comp));
-        angle_sensor.lut_ready = 1;
+        angle_sensor_load_lut(&angle_sensor, (const float *)&ENCODER_LUT, ERROR_LUT_SIZE);
         printf("Encoder cal loaded: e_zero=%.4f, ppairs=%d, dir=%s\r\n",
             angle_sensor.e_zero, angle_sensor.pole_pairs,
             (angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
     }
-    angle_sensor.mech_angle_rad = 0;
-    angle_sensor.mech_angle_vel = 0;
-    angle_sensor.e_rad          = 0;
-    angle_sensor.first_sample   = 0;
-    angle_sensor.lut_ready      = 0;
     angle_sensor.pos_hat        = 0;
     angle_sensor.rotor_vel      = 0;
     angle_sensor.turns          = 0;
@@ -71,8 +70,6 @@ void angle_sensor_load_lut(AngleSensor_t *sensor,
                            const float   *lut,
                            uint16_t       lut_size)
 {
-    if (sensor == NULL || lut == NULL) return;
-
     uint16_t copy_size = lut_size < ERROR_LUT_SIZE ? lut_size : ERROR_LUT_SIZE;
     memcpy(sensor->encd_error_comp, lut, copy_size * sizeof(float));
     sensor->lut_ready = 1U;

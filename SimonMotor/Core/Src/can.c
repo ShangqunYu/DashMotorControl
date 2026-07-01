@@ -200,15 +200,15 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
     if (first_seven_bytes_all_ones) {
         uint8_t mode = message_received.data[7];
         if (mode <= L_MEAS_MODE) {
-            motor.pending_fsm_cmd = mode;
+            motor.cmd.pending_fsm_cmd = mode;
         }
         return;
     }
 
     /* Regular MIT position/velocity/gain command */
     if (message_received.rx_header.DLC == 8) {
-        unpack_cmd(message_received, (float *)motor.mit_buf.commands);
-        motor.new_cmd = 1;
+        unpack_cmd(message_received, (float *)motor.cmd.cmd_buf.commands);
+        motor.cmd.new_cmd = 1;
     }
 }
 /* USER CODE END 1 */

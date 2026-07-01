@@ -36,9 +36,18 @@ typedef struct {
     };	
 } MIT_CMD;
 
+
+typedef struct {
+	MIT_CMD curr_cmd;
+	volatile MIT_CMD cmd_buf;
+	volatile uint8_t new_cmd;
+	volatile uint8_t pending_fsm_cmd;
+} MOTOR_CMD;
+
 typedef struct {
 	AngleSensor_t angle_sensor;  /* MA732 + all angle/velocity state */
     CurrentSensor current_sensor;
+	MOTOR_CMD cmd;
 	GateDriver gateDriver;
 
 	float max_current;
@@ -52,10 +61,7 @@ typedef struct {
 
     uint32_t pwm_resolution;
 
-	MIT_CMD          mit_cmd;
-	volatile MIT_CMD mit_buf;
-	volatile uint8_t new_cmd;
-	volatile uint8_t pending_fsm_cmd;
+
 
 	/* ── R/L measurement ── */
 	float Rs, Ld, Lq;

@@ -34,13 +34,13 @@ void run_fsm(FSMStruct *fsmstate)
     angle_sensor_update(&motor.angle_sensor);
 
     /* 2. Handling pending commands from CAN ISR -------------------------------- */
-    if (motor.pending_fsm_cmd != NO_PENDING_MODE) {
-        fsmstate->next_state  = (motor_state)motor.pending_fsm_cmd;
-        motor.pending_fsm_cmd  = NO_PENDING_MODE;
+    if (motor.cmd.pending_fsm_cmd != NO_PENDING_MODE) {
+        fsmstate->next_state  = (motor_state)motor.cmd.pending_fsm_cmd;
+        motor.cmd.pending_fsm_cmd  = NO_PENDING_MODE;
     }
-    if (motor.new_cmd) {
-        motor.mit_cmd = motor.mit_buf;
-        motor.new_cmd = 0;
+    if (motor.cmd.new_cmd) {
+        motor.cmd.curr_cmd = motor.cmd.cmd_buf;
+        motor.cmd.new_cmd = 0;
     }
 
     /* 3. FSM transition management ---------------------------------------- */

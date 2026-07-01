@@ -7,7 +7,6 @@
 
 #include "PMSM_motor.h"
 #include "angle_sensor.h"
-#include "main.h"
 #include "hw_config.h"
 #include "tim.h"
 #include <math.h>
@@ -17,11 +16,11 @@
 void zero_commands(PMSM_motor *motor) {
     motor->id_ref = 0.0f;
     motor->iq_ref = 0.0f;
-    motor->mit_cmd.kd    = 0;
-    motor->mit_cmd.kp    = 0;
-    motor->mit_cmd.t_ff  = 0;
-    motor->mit_cmd.p_des = 0;
-    motor->mit_cmd.v_des = 0;
+    motor->cmd.curr_cmd.kd    = 0;
+    motor->cmd.curr_cmd.kp    = 0;
+    motor->cmd.curr_cmd.t_ff  = 0;
+    motor->cmd.curr_cmd.p_des = 0;
+    motor->cmd.curr_cmd.v_des = 0;
 }
 
 
@@ -44,9 +43,9 @@ void set_limit_current(PMSM_motor *motor, float i_limit) {
 
 void mit_control_update(PMSM_motor *motor){
     motor->id_ref = 0.0f;
-    float pos_error = motor->mit_cmd.p_des - motor->angle_sensor.mech_angle_rad;
-    float vel_error = motor->mit_cmd.v_des - motor->angle_sensor.mech_angle_vel;
-    float torque_des = motor->mit_cmd.kp * pos_error + motor->mit_cmd.kd * vel_error + motor->mit_cmd.t_ff;
+    float pos_error = motor->cmd.curr_cmd.p_des - motor->angle_sensor.mech_angle_rad;
+    float vel_error = motor->cmd.curr_cmd.v_des - motor->angle_sensor.mech_angle_vel;
+    float torque_des = motor->cmd.curr_cmd.kp * pos_error + motor->cmd.curr_cmd.kd * vel_error + motor->cmd.curr_cmd.t_ff;
     motor->iq_ref = torque_des * (1.0f / (KT*GR));
     // Cap iq_ref for safety
     motor->iq_ref = constrain(motor->iq_ref, -motor->max_current, motor->max_current);

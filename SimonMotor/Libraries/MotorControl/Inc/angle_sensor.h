@@ -47,13 +47,15 @@ typedef struct {
     float e_zero;           // electrical zero (rad): encoder reading when e=0, from calibration
     float m_zero;           // mechanical zero (rad): user-defined position reference
     float e_rad;            // electric angle latched each FOC cycle
+    int turns;              // cumulative turn count for multi-turn support
 
+    // velocity observer related state
     float rotor_vel;        // rotor velocity (rad/s, direction-corrected)
     float mech_angle_vel;   // mechanical angular velocity after the gear ratio
     float pos_hat;          // observer: estimated position
     float vel_hat;          // observer: estimated velocity
     uint8_t obs_ready;      // 1 once observer has been initialised
-    int turns;                            // cumulative turn count for multi-turn support
+
 
     uint8_t pole_pairs, first_sample;
     dir_mode_t sensor_dir;
