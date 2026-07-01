@@ -26,7 +26,7 @@
 #include "can.h"
 #include "hw_config.h"
 #include "user_config.h"
-#include "foc.h"
+#include "PMSM_motor.h"
 #include "fsm.h"
 /* USER CODE END Includes */
 
@@ -71,8 +71,8 @@ extern DMA_HandleTypeDef hdma_spi3_tx;
 extern TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN EV */
-extern foc_t              hfoc;
-extern FSMStruct          hfsm;
+
+
 /* USER CODE END EV */
 
 /******************************************************************************/

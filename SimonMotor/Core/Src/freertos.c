@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "foc.h"
+#include "PMSM_motor.h"
 #include "foc_calibration.h"
 #include "fsm.h"
 #include "angle_sensor.h"
@@ -54,11 +54,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-extern foc_t       hfoc;
+extern PMSM_motor       motor;
 extern CalStruct   hcal;
 extern FSMStruct   hfsm;
 extern PreferenceWriter prefs;
-extern DRVStruct   drv;
 
 /* FOC loop timing instrumentation (set in HAL_ADCEx_InjectedConvCpltCallback) */
 extern volatile uint32_t foc_loop_cycles_min;
@@ -154,7 +153,7 @@ void startMotorMgrTask(void *argument)
 
     if (++temp_update_counter >= 100) {
       temp_update_counter = 0;
-      update_temperature(&hfoc.motor_temp);
+      update_temperature(&motor.motor_temp);
     }
 
     /* Print FOC-loop (run_fsm) timing stats once per 5 seconds, then reset */
@@ -173,45 +172,45 @@ void startMotorMgrTask(void *argument)
         foc_loop_cycles_sum   = 0;
         foc_loop_cycles_count = 0;
       }
-      drv_print_faults(drv);
+      drv_print_faults(motor.gateDriver);
     }
 
     if (hfsm.curr_state == SET_ZERO_MODE) {
-      angle_sensor_set_m_zero(&hfoc.angle_sensor);
-      M_ZERO_RAD = hfoc.angle_sensor.m_zero;
+      angle_sensor_set_m_zero(&motor.angle_sensor);
+      M_ZERO_RAD = motor.angle_sensor.m_zero;
       osSemaphoreRelease(flash_write_sem);
-      printf("Mechanical zero set: m_zero=%.4f rad\r\n", hfoc.angle_sensor.m_zero);
+      printf("Mechanical zero set: m_zero=%.4f rad\r\n", motor.angle_sensor.m_zero);
       hfsm.next_state = MENU_MODE;
     }
 
     if (hcal.cal_state == CAL_STATE_LUT_POSTPROC_PENDING) {
-      foc_cal_lut_postprocess(&hfoc, &hcal);
-      memcpy(&ENCODER_LUT, hfoc.angle_sensor.encd_error_comp,
-             sizeof(hfoc.angle_sensor.encd_error_comp));
-      E_ZERO_RAD   = hfoc.angle_sensor.e_zero;
-      PHASE_ORDER = hfoc.angle_sensor.sensor_dir;
-      PPAIRS = hfoc.angle_sensor.pole_pairs;
+      foc_cal_lut_postprocess(&motor, &hcal);
+      memcpy(&ENCODER_LUT, motor.angle_sensor.encd_error_comp,
+             sizeof(motor.angle_sensor.encd_error_comp));
+      E_ZERO_RAD   = motor.angle_sensor.e_zero;
+      PHASE_ORDER = motor.angle_sensor.sensor_dir;
+      PPAIRS = motor.angle_sensor.pole_pairs;
       CALIBRATION_DONE_FLAG = 1;
       osSemaphoreRelease(flash_write_sem);
       printf("LUT calibration complete, saved to flash\r\n");
     }
 
     if (hfsm.curr_state == ENCODER_MODE) {
-      // printf("m_angle_raw:  %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad_raw);
-      printf("m_angle_comp: %.4f rad\r\n", hfoc.angle_sensor.s_rotor_rad);
+      // printf("m_angle_raw:  %.4f rad\r\n", motor.angle_sensor.s_rotor_rad_raw);
+      printf("m_angle_comp: %.4f rad\r\n", motor.angle_sensor.s_rotor_rad);
     }
 
-    // printf("id: %.3f\r\n",       hfoc.id);
-    // printf("id_des: %.3f\r\n",   hfoc.id_ref);
-    // printf("id_filt: %.3f\r\n",  hfoc.id_filtered);
-    // printf("iq: %.3f\r\n",       hfoc.iq);
-    // printf("i_q_des: %.3f\r\n",  hfoc.iq_ref);
-    // printf("i_q_filt: %.3f\r\n", hfoc.iq_filtered);
-    // printf("i_a: %.3f\r\n",      hfoc.current_sensor.ia_filtered);
-    // printf("i_b: %.3f\r\n",      hfoc.current_sensor.ib_filtered);
-    // printf("i_c: %.3f\r\n",      hfoc.current_sensor.ic_filtered);
-    // printf("m_angle: %.4f\r\n",  hfoc.angle_sensor.s_rotor_rad);
-    // printf("e_angle: %.4f\r\n",  hfoc.angle_sensor.e_rad);
+    // printf("id: %.3f\r\n",       motor.id);
+    // printf("id_des: %.3f\r\n",   motor.id_ref);
+    // printf("id_filt: %.3f\r\n",  motor.id_filtered);
+    // printf("iq: %.3f\r\n",       motor.iq);
+    // printf("i_q_des: %.3f\r\n",  motor.iq_ref);
+    // printf("i_q_filt: %.3f\r\n", motor.iq_filtered);
+    // printf("i_a: %.3f\r\n",      motor.current_sensor.ia_filtered);
+    // printf("i_b: %.3f\r\n",      motor.current_sensor.ib_filtered);
+    // printf("i_c: %.3f\r\n",      motor.current_sensor.ic_filtered);
+    // printf("m_angle: %.4f\r\n",  motor.angle_sensor.s_rotor_rad);
+    // printf("e_angle: %.4f\r\n",  motor.angle_sensor.e_rad);
   }
   /* USER CODE END startMotorMgrTask */
 }

@@ -38,7 +38,7 @@
 #include "drv8353.h"
 #include <stdio.h>
 #include <string.h>
-#include "foc.h"
+#include "PMSM_motor.h"
 #include "angle_sensor.h"
 #include "foc_calibration.h"
 #include "pid_utils.h"
@@ -65,8 +65,8 @@
 float __float_reg[64];
 int __int_reg[256];
 PreferenceWriter prefs;
-DRVStruct drv;
-foc_t hfoc;
+
+PMSM_motor motor;
 CalStruct hcal;
 // CANTxMessage can_tx;
 // CANRxMessage can_rx;
@@ -117,6 +117,7 @@ int main(void)
   I_MAX = 60.0f;
   if(isnan(I_FW_MAX) || I_FW_MAX ==-1){I_FW_MAX=0;}
   if(CAN_ID==-1){CAN_ID = 1;}
+  CAN_ID = 1;
   if(CAN_MASTER==-1){CAN_MASTER = 0;}
   if(CAN_TIMEOUT==-1){CAN_TIMEOUT = 10000;}
   if(isnan(R_NOMINAL) || R_NOMINAL==-1){R_NOMINAL = 0.0f;}
@@ -171,11 +172,12 @@ int main(void)
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
   /* DRV8353 setup */
-  drv_init(drv, I_MAX);
+  drv_init(motor.gateDriver, I_MAX);
 
   /* FOC sensor init — must come before MA732 start so the LUT is active
      from the very first SPI callback */
-  hfoc.angle_sensor = angle_sensor_init();
+  motor.angle_sensor        = angle_sensor_init();
+  motor.pending_fsm_cmd     = NO_PENDING_MODE;
 
 
   /* Turn on PWM */
@@ -187,40 +189,40 @@ int main(void)
   // shift ADC trigger to occur slightly before the PWM edge to allow for sampling during the deadtime
   htim1.Instance->CCR4 = htim1.Instance->ARR - ADC_TRIG_OFFSET;
 
-  foc_timer_init(&hfoc, &htim1);
-  foc_set_limit_current(&hfoc, I_MAX);
+  timer_init(&motor, &htim1);
+  set_limit_current(&motor, I_MAX);
   init_trig_lut();
 
-  pid_reset(&hfoc.id_ctrl);
-  pid_set_ts(&hfoc.id_ctrl, FOC_TS);
-  pid_set_kp(&hfoc.id_ctrl, 0.05f);
-  pid_set_ki(&hfoc.id_ctrl, 200.0f);
-  pid_set_max_out_dynamic(&hfoc.id_ctrl, 0.8f);
-  pid_set_deadband(&hfoc.id_ctrl, 0.0001f);
+  pid_reset(&motor.id_ctrl);
+  pid_set_ts(&motor.id_ctrl, FOC_TS);
+  pid_set_kp(&motor.id_ctrl, 0.05f);
+  pid_set_ki(&motor.id_ctrl, 200.0f);
+  pid_set_max_out_dynamic(&motor.id_ctrl, 0.8f);
+  pid_set_deadband(&motor.id_ctrl, 0.0001f);
 
-  pid_reset(&hfoc.iq_ctrl);
-  pid_set_ts(&hfoc.iq_ctrl, FOC_TS);
-  pid_set_kp(&hfoc.iq_ctrl, 0.05f);
-  pid_set_ki(&hfoc.iq_ctrl, 200.0f);
-  pid_set_max_out_dynamic(&hfoc.iq_ctrl, 0.8f);
-  pid_set_deadband(&hfoc.iq_ctrl, 0.0001f);
+  pid_reset(&motor.iq_ctrl);
+  pid_set_ts(&motor.iq_ctrl, FOC_TS);
+  pid_set_kp(&motor.iq_ctrl, 0.05f);
+  pid_set_ki(&motor.iq_ctrl, 200.0f);
+  pid_set_max_out_dynamic(&motor.iq_ctrl, 0.8f);
+  pid_set_deadband(&motor.iq_ctrl, 0.0001f);
 
   	// current sensor
   hfsm.curr_state = MENU_MODE;
   hfsm.next_state = MENU_MODE;
-  CurrentSensor_init(&hfoc.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
+  CurrentSensor_init(&motor.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
 	HAL_ADCEx_InjectedStart_IT(&hadc3);
   HAL_Delay(50);
 
-  drv_enable_gd(drv);
+  drv_enable_gd(motor.gateDriver);
   htim1.Instance->CCR1 = 0u;
   htim1.Instance->CCR2 = 0u;
   htim1.Instance->CCR3 = 0u;
-  CurrentSensor_calibrate(&hfoc.current_sensor, 1000U);
+  CurrentSensor_calibrate(&motor.current_sensor, 1000U);
   printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
-         hfoc.current_sensor.adc_a_offset, hfoc.current_sensor.adc_b_offset, hfoc.current_sensor.adc_c_offset);
+         motor.current_sensor.adc_a_offset, motor.current_sensor.adc_b_offset, motor.current_sensor.adc_c_offset);
 
   /* USER CODE END 2 */
 
@@ -314,12 +316,13 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
     // Don't trigger anything on the callbacks for ADC1 and ADC2.
     // We want to wait to do any work until we're sure we have info from
     // all three ADCs.
-    CurrentSensor_sample_offset(&hfoc.current_sensor);
+    CurrentSensor_sample_offset(&motor.current_sensor);
 
     uint32_t cyc_start = DWT->CYCCNT;
-    run_fsm(&hfsm);
-    uint32_t cycles = DWT->CYCCNT - cyc_start;
 
+    run_fsm(&hfsm);
+    
+    uint32_t cycles = DWT->CYCCNT - cyc_start;
     if (cycles < foc_loop_cycles_min) foc_loop_cycles_min = cycles;
     if (cycles > foc_loop_cycles_max) foc_loop_cycles_max = cycles;
     foc_loop_cycles_sum += cycles;

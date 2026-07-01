@@ -43,7 +43,7 @@ def _nanosleep(secs):
 CHANNEL = sys.argv[1] if len(sys.argv) > 1 else "can0"
 CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
-# ── Mode bytes (must match foc.h) ────────────────────────────────────────────
+# ── Mode bytes (must match PMSM_motor.h) ────────────────────────────────────────────
 MENU_MODE = 0
 MIT_MODE  = 5
 

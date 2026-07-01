@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 #include "hw_config.h"   /* LUT_SAMPLES_PER_PPAIR, PPAIRS_MAX, W_CAL */
-#include "foc.h"         /* foc_t */
+#include "PMSM_motor.h"         /* foc_t */
 
 /* ── LUT sizing ──────────────────────────────────────────────────────────── */
 /* Buffer sized for worst-case pole pairs at compile time.
@@ -44,8 +44,11 @@ typedef struct {
 } CalStruct;
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
-void foc_cal_encoder_misalignment_start(foc_t *hfoc, CalStruct *hcal);
-void foc_cal_encoder_misalignment_update(foc_t *hfoc, CalStruct *hcal);
-void foc_cal_lut_postprocess(foc_t *hfoc, CalStruct *hcal);
+void foc_cal_encoder_misalignment_start(PMSM_motor *motor, CalStruct *hcal);
+void cal_encoder_misalignment_update(PMSM_motor *motor, CalStruct *hcal);
+void foc_cal_lut_postprocess(PMSM_motor *motor, CalStruct *hcal);
+void foc_r_meas_update(PMSM_motor *motor);
+void foc_l_meas_update(PMSM_motor *motor);
+void inject_amp_and_measure_id_iq(PMSM_motor *motor, float vd_ref, float vq_ref, float *id, float *iq);
 
 #endif /* FOC_CALIBRATION_H_ */

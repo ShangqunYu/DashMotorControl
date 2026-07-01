@@ -19,15 +19,14 @@ import can
 CHANNEL = sys.argv[1] if len(sys.argv) > 1 else "can0"
 CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
-# Mode bytes (must match state in foc.h)
+# Mode bytes (must match state in PMSM_motor.h)
 MENU_MODE = 0
 CALIBRATION_MODE     = 1
 MIT_MODE             = 2
 ENCODER_MODE         = 3
 SET_ZERO_MODE        = 4
-SETUP_MODE           = 5
-R_MEAS_MODE          = 6
-L_MEAS_MODE          = 7
+R_MEAS_MODE          = 5
+L_MEAS_MODE          = 6
 
 # Scaling ranges — must match flash-stored values on the motor
 # V_BUS and TEMP are hardcoded in hw_config.h; the rest are user-configurable
@@ -96,7 +95,7 @@ def main():
         sys.exit(f"Failed to open {CHANNEL}: {exc}")
 
     try:
-        send_mode(bus, CAN_ID, MENU_MODE)
+        send_mode(bus, CAN_ID, L_MEAS_MODE)
         receive_reply(bus)
     except Exception as exc:
         sys.exit(f"Error: {exc}")

@@ -168,24 +168,24 @@ typedef struct{
 		uint16_t spi_rx_word;
 	};
 	uint16_t fault;
-} DRVStruct;
+} GateDriver;
 
 
-uint16_t drv_spi_write(DRVStruct * drv, uint16_t val);
-uint16_t drv_read_FSR1(DRVStruct drv);
-uint16_t drv_read_FSR2(DRVStruct drv);
-uint16_t drv_read_register(DRVStruct drv, int reg);
-void drv_write_register(DRVStruct drv, int reg, int val);
-void drv_write_DCR(DRVStruct drv, int DIS_CPUV, int DIS_GDF, int OTW_REP, int PWM_MODE, int PWM_COM, int PWM_DIR, int COAST, int BRAKE, int CLR_FLT);
-void drv_write_HSR(DRVStruct drv, int LOCK, int IDRIVEP_HS, int IDRIVEN_HS);
-void drv_write_LSR(DRVStruct drv, int CBC, int TDRIVE, int IDRIVEP_LS, int IDRIVEN_LS);
-void drv_write_OCPCR(DRVStruct drv, int TRETRY, int DEAD_TIME, int OCP_MODE, int OCP_DEG, int VDS_LVL);
-void drv_write_CSACR(DRVStruct drv, int CSA_FET, int VREF_DIV, int LS_REF, int CSA_GAIN, int DIS_SEN, int CSA_CAL_A, int CSA_CAL_B, int CSA_CAL_C, int SEN_LVL);
-void drv_init(DRVStruct drv, float i_max);
-void drv_enable_gd(DRVStruct drv);
-void drv_disable_gd(DRVStruct drv);
-void drv_calibrate(DRVStruct drv);
-void drv_print_faults(DRVStruct drv);
+uint16_t drv_spi_write(GateDriver * drv, uint16_t val);
+uint16_t drv_read_FSR1(GateDriver drv);
+uint16_t drv_read_FSR2(GateDriver drv);
+uint16_t drv_read_register(GateDriver drv, int reg);
+void drv_write_register(GateDriver drv, int reg, int val);
+void drv_write_DCR(GateDriver drv, int DIS_CPUV, int DIS_GDF, int OTW_REP, int PWM_MODE, int PWM_COM, int PWM_DIR, int COAST, int BRAKE, int CLR_FLT);
+void drv_write_HSR(GateDriver drv, int LOCK, int IDRIVEP_HS, int IDRIVEN_HS);
+void drv_write_LSR(GateDriver drv, int CBC, int TDRIVE, int IDRIVEP_LS, int IDRIVEN_LS);
+void drv_write_OCPCR(GateDriver drv, int TRETRY, int DEAD_TIME, int OCP_MODE, int OCP_DEG, int VDS_LVL);
+void drv_write_CSACR(GateDriver drv, int CSA_FET, int VREF_DIV, int LS_REF, int CSA_GAIN, int DIS_SEN, int CSA_CAL_A, int CSA_CAL_B, int CSA_CAL_C, int SEN_LVL);
+void drv_init(GateDriver drv, float i_max);
+void drv_enable_gd(GateDriver drv);
+void drv_disable_gd(GateDriver drv);
+void drv_calibrate(GateDriver drv);
+void drv_print_faults(GateDriver drv);
 
 
 #endif /* INC_DRV8353_H_ */

@@ -49,12 +49,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Libraries/MotorControl/Src/flash_writer.c
     Libraries/MotorControl/Src/drv8353.c
     Libraries/MotorControl/Src/math_utils.c
-    Libraries/MotorControl/Src/foc.c
+    Libraries/MotorControl/Src/PMSM_motor.c
     Libraries/MotorControl/Src/foc_calibration.c
     Libraries/MotorControl/Src/angle_sensor.c
     Libraries/MotorControl/Src/analog_sensor.c
     Libraries/MotorControl/Src/fsm.c
     Libraries/MotorControl/Src/pid_utils.c
+    Libraries/MotorControl/Src/foc.c
 )
 
 # Add include paths

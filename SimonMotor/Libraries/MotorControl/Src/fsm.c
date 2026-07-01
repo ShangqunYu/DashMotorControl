@@ -7,7 +7,7 @@
  */
 
 #include "fsm.h"
-#include "foc.h"
+#include "PMSM_motor.h"
 #include "foc_calibration.h"
 #include "analog_sensor.h"
 #include "angle_sensor.h"
@@ -22,23 +22,25 @@
 #include <math.h>
 
 /* ── Globals owned by main.c ─────────────────────────────────────────────── */
-extern foc_t            hfoc;
+extern PMSM_motor       motor;
 extern CalStruct        hcal;
-extern PreferenceWriter prefs;
-extern DRVStruct        drv;
 
 /* ── run_fsm ─────────────────────────────────────────────────────────────── */
 
 void run_fsm(FSMStruct *fsmstate)
 {
     /* 1. Per-cycle pre-processing ----------------------------------------- */
-    update_power_voltage(&hfoc.v_bus);
-    angle_sensor_update(&hfoc.angle_sensor);
+    update_power_voltage(&motor.v_bus);
+    angle_sensor_update(&motor.angle_sensor);
 
-    /* 2. Apply pending MIT parameters (not a mode change) ----------------- */
-    if (hfoc.new_cmd) {
-        hfoc.mit_cmd    = hfoc.mit_buf;
-        hfoc.new_cmd = 0;
+    /* 2. Handling pending commands from CAN ISR -------------------------------- */
+    if (motor.pending_fsm_cmd != NO_PENDING_MODE) {
+        fsmstate->next_state  = (motor_state)motor.pending_fsm_cmd;
+        motor.pending_fsm_cmd  = NO_PENDING_MODE;
+    }
+    if (motor.new_cmd) {
+        motor.mit_cmd = motor.mit_buf;
+        motor.new_cmd = 0;
     }
 
     /* 3. FSM transition management ---------------------------------------- */
@@ -52,19 +54,18 @@ void run_fsm(FSMStruct *fsmstate)
     switch (fsmstate->curr_state) {
 
         case MENU_MODE:
-        case SETUP_MODE:
             /* Coast — no PWM drive */
             break;
 
         case MIT_MODE:
-            foc_mit_control_update(&hfoc);
-            foc_current_control_update(&hfoc);
+            mit_control_update(&motor);
+            current_control_update(&motor);
             break;
 
         case CALIBRATION_MODE:
             if (hcal.cal_state != CAL_STATE_IDLE &&
                 hcal.cal_state != CAL_STATE_LUT_POSTPROC_PENDING) {
-                foc_cal_encoder_misalignment_update(&hfoc, &hcal);
+                cal_encoder_misalignment_update(&motor, &hcal);
             }
             /* LUT_POSTPROC_PENDING: postprocessing is compute-intensive; the
              * FreeRTOS task calls foc_cal_lut_postprocess() from the main loop.
@@ -78,24 +79,24 @@ void run_fsm(FSMStruct *fsmstate)
 
         case ENCODER_MODE:
         case SET_ZERO_MODE:
-            open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
+            open_loop_voltage_control(&motor, 0.0f, 0.0f, 0.0f);
             break;
 
         case R_MEAS_MODE:
-            foc_r_meas_update(&hfoc);
-            if (hfoc.meas_done) {
-                hfoc.meas_done = 0;
-                printf("\r\nRs = %.4f Ohm\r\n", hfoc.Rs);
+            foc_r_meas_update(&motor);
+            if (motor.meas_done) {
+                motor.meas_done = 0;
+                printf("\r\nRs = %.4f Ohm\r\n", motor.Rs);
                 fsmstate->next_state = MENU_MODE;
             }
             break;
 
         case L_MEAS_MODE:
-            foc_l_meas_update(&hfoc);
-            if (hfoc.meas_done) {
-                hfoc.meas_done = 0;
+            foc_l_meas_update(&motor);
+            if (motor.meas_done) {
+                motor.meas_done = 0;
                 printf("\r\nLd = %.4f mH   Lq = %.4f mH\r\n",
-                       hfoc.Ld * 1000.0f, hfoc.Lq * 1000.0f);
+                       motor.Ld * 1000.0f, motor.Lq * 1000.0f);
                 fsmstate->next_state = MENU_MODE;
             }
             break;
@@ -112,23 +113,15 @@ void fsm_enter_state(FSMStruct *fsmstate)
     switch (fsmstate->curr_state) {
 
         case MENU_MODE:
-            enter_menu_state();
-            break;
-
-        case SETUP_MODE:
-            enter_setup_state();
             break;
 
         case MIT_MODE:
-            drv_enable_gd(drv);
-            foc_current_control_update(&hfoc);   /* reset PI integrators */
-            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
-            foc_zero_commands(&hfoc);
+            enable_motor();
             break;
 
         case CALIBRATION_MODE:
-            foc_cal_encoder_misalignment_start(&hfoc, &hcal);
-            drv_enable_gd(drv);
+            enable_motor();
+            foc_cal_encoder_misalignment_start(&motor, &hcal);
             break;
 
         case ENCODER_MODE:
@@ -136,28 +129,25 @@ void fsm_enter_state(FSMStruct *fsmstate)
             break;
 
         case R_MEAS_MODE:
-            drv_enable_gd(drv);
-            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
-            if (hfoc.meas_inj_amp <= 0.0f) { hfoc.meas_inj_amp = 1.0f; }
-            hfoc.meas_inj_amp = 3.0f;
-            hfoc.meas_inj_n = 0;
-            hfoc.meas_done  = 0;
-            printf("\r\nStarting R measurement (Vd = %.2f V)...\r\n", hfoc.meas_inj_amp);
+            enable_motor();
+            motor.meas_inj_amp = 3.0f;
+            motor.meas_inj_n = 0;
+            motor.meas_done  = 0;
+            printf("\r\nStarting R measurement (Vd = %.2f V)...\r\n", motor.meas_inj_amp);
             break;
 
         case L_MEAS_MODE:
-            drv_enable_gd(drv);
-            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
-            if (hfoc.meas_inj_amp <= 0.0f) { hfoc.meas_inj_amp = 1.0f; }
-            hfoc.meas_inj_n   = 0;
-            hfoc.meas_done    = 0;
-            hfoc.l_meas_Vc    = 0.0f;
-            hfoc.l_meas_Vs    = 0.0f;
-            hfoc.l_meas_Ic    = 0.0f;
-            hfoc.l_meas_Is    = 0.0f;
-            hfoc.l_meas_phase = 1;
+            enable_motor();
+            motor.meas_inj_amp = 3.0f;
+            motor.meas_inj_n   = 0;
+            motor.meas_done    = 0;
+            motor.l_meas_Vc    = 0.0f;
+            motor.l_meas_Vs    = 0.0f;
+            motor.l_meas_Ic    = 0.0f;
+            motor.l_meas_Is    = 0.0f;
+            motor.l_meas_phase = 1;
             printf("\r\nStarting L measurement (V = %.2f V, f = 1000 Hz)...\r\n",
-                   hfoc.meas_inj_amp);
+                   motor.meas_inj_amp);
             break;
 
         default:
@@ -172,21 +162,17 @@ void fsm_exit_state(FSMStruct *fsmstate)
     switch (fsmstate->curr_state) {
 
         case MIT_MODE:
-            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_RESET);
+            disable_motor();
         case CALIBRATION_MODE:
+            disable_motor();
         case R_MEAS_MODE:
         case L_MEAS_MODE:
-            drv_disable_gd(drv);
-            open_loop_voltage_control(&hfoc, 0.0f, 0.0f, 0.0f);
-            hfoc.id_ref = 0.0f;
-            hfoc.iq_ref = 0.0f;
-            HAL_GPIO_WritePin(RED_LED, GPIO_PIN_RESET);
+            disable_motor();
             break;
 
         case MENU_MODE:
         case ENCODER_MODE:
         case SET_ZERO_MODE:
-        case SETUP_MODE:
             break;
 
         default:
@@ -194,177 +180,15 @@ void fsm_exit_state(FSMStruct *fsmstate)
     }
 }
 
-/* ── update_fsm ──────────────────────────────────────────────────────────── */
 
-void update_fsm(FSMStruct *fsmstate, char fsm_input)
-{
-    /* ESC always returns to menu from any curr_state */
-    if (fsm_input == MENU_CMD) {
-        fsmstate->next_state = MENU_MODE;
-        return;
-    }
-
-    switch (fsmstate->curr_state) {
-
-        case MENU_MODE:
-            switch (fsm_input) {
-                case CAL_CMD:
-                    fsmstate->next_state = CALIBRATION_MODE;
-                    break;
-                case MOTOR_CMD:
-                    fsmstate->next_state = MIT_MODE;
-                    break;
-                case ENCODER_CMD:
-                    fsmstate->next_state = ENCODER_MODE;
-                    break;
-                case SETUP_CMD:
-                    fsmstate->next_state = SETUP_MODE;
-                    break;
-                case R_MEAS_CMD:
-                    fsmstate->next_state = R_MEAS_MODE;
-                    break;
-                case L_MEAS_CMD:
-                    fsmstate->next_state = L_MEAS_MODE;
-                    break;
-                case ZERO_CMD:
-                    fsmstate->next_state = SET_ZERO_MODE;
-                    break;
-            }
-            break;
-
-        case SETUP_MODE:
-            if (fsm_input == ENTER_CMD) {
-                process_user_input(fsmstate);
-                break;
-            }
-            if (fsmstate->bytecount == 0) { fsmstate->cmd_id = fsm_input; }
-            else { fsmstate->cmd_buff[fsmstate->bytecount - 1] = fsm_input; }
-            fsmstate->bytecount++;
-            break;
-
-        case ENCODER_MODE:
-        case MIT_MODE:
-        case CALIBRATION_MODE:
-        default:
-            break;
-    }
+void disable_motor(){
+    zero_commands(&motor);
+    drv_disable_gd(motor.gateDriver);
+    HAL_GPIO_WritePin(RED_LED, GPIO_PIN_RESET);
 }
 
-/* ── Serial menu helpers ─────────────────────────────────────────────────── */
-
-void enter_menu_state(void)
-{
-    printf("\r\n\r\n");
-    printf(" Commands:\r\n");
-    printf(" m - Motor Mode (torque control)\r\n");
-    printf(" c - Calibrate Encoder\r\n");
-    printf(" r - Measure Resistance (Rs)\r\n");
-    printf(" l - Measure Inductance (Ld, Lq)\r\n");
-    printf(" s - Setup\r\n");
-    printf(" e - Display Encoder\r\n");
-    printf(" z - Set Zero Position\r\n");
-    printf(" ESC - Exit to Menu\r\n");
-}
-
-void enter_setup_state(void)
-{
-    printf("\r\n Configuration Options \r\n");
-    printf(" %-4s %-31s %-5s %-6s %-2s\r\n", "prefix", "parameter", "min", "max", "current value");
-    printf("\r\n Motor:\r\n");
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "g", "Gear Ratio", "0", "-", GR);
-    printf(" %-4s %-31s %-5s %-6s %.5f\r\n", "k", "Torque Constant (N-m/A)", "0", "-", KT);
-    printf("\r\n Control:\r\n");
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "b", "Current Bandwidth (Hz)", "100", "2000", I_BW);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "l", "Current Limit (A)", "0.0", "75.0", I_MAX);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "p", "Max Position Setpoint (rad)", "-", "-", P_MAX);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "v", "Max Velocity Setpoint (rad/s)", "-", "-", V_MAX);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "x", "Max Position Gain (N-m/rad)", "0.0", "1000.0", KP_MAX);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "d", "Max Velocity Gain (N-m/rad/s)", "0.0", "5.0", KD_MAX);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "f", "FW Current Limit (A)", "0.0", "33.0", I_FW_MAX);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "c", "Continuous Current (A)", "0.0", "40.0", I_MAX_CONT);
-    printf(" %-4s %-31s %-5s %-6s %.3f\r\n", "a", "Calibration Current (A)", "0.0", "20.0", I_CAL);
-    printf("\r\n CAN:\r\n");
-    printf(" %-4s %-31s %-5s %-6s %-5i\r\n", "i", "CAN ID", "0", "127", CAN_ID);
-    printf(" %-4s %-31s %-5s %-6s %-5i\r\n", "m", "CAN TX ID", "0", "127", CAN_MASTER);
-    printf(" %-4s %-31s %-5s %-6s %d\r\n",   "t", "CAN Timeout (cycles)(0 = none)", "0", "100000", CAN_TIMEOUT);
-    printf(" \r\n To change a value, type 'prefix''value''ENTER'\r\n e.g. 'b1000''ENTER'\r\n ");
-    printf("VALUES NOT ACTIVE UNTIL POWER CYCLE!\r\n\r\n");
-}
-
-void process_user_input(FSMStruct *fsmstate)
-{
-    switch (fsmstate->cmd_id) {
-        case 'b':
-            I_BW = fmaxf(fminf(atof(fsmstate->cmd_buff), 2000.0f), 100.0f);
-            printf("I_BW set to %f\r\n", I_BW);
-            break;
-        case 'i':
-            CAN_ID = atoi(fsmstate->cmd_buff);
-            printf("CAN_ID set to %d\r\n", CAN_ID);
-            break;
-        case 'm':
-            CAN_MASTER = atoi(fsmstate->cmd_buff);
-            printf("CAN_TX_ID set to %d\r\n", CAN_MASTER);
-            break;
-        case 'l':
-            I_MAX = fmaxf(fminf(atof(fsmstate->cmd_buff), 75.0f), 0.0f);
-            printf("I_MAX set to %f\r\n", I_MAX);
-            break;
-        case 'f':
-            I_FW_MAX = fmaxf(fminf(atof(fsmstate->cmd_buff), 33.0f), 0.0f);
-            printf("I_FW_MAX set to %f\r\n", I_FW_MAX);
-            break;
-        case 't':
-            CAN_TIMEOUT = atoi(fsmstate->cmd_buff);
-            printf("CAN_TIMEOUT set to %d\r\n", CAN_TIMEOUT);
-            break;
-        case 'c':
-            I_MAX_CONT = fmaxf(fminf(atof(fsmstate->cmd_buff), 40.0f), 0.0f);
-            printf("I_MAX_CONT set to %f\r\n", I_MAX_CONT);
-            break;
-        case 'a':
-            I_CAL = fmaxf(fminf(atof(fsmstate->cmd_buff), 20.0f), 0.0f);
-            printf("I_CAL set to %f\r\n", I_CAL);
-            break;
-        case 'g':
-            GR = fmaxf(atof(fsmstate->cmd_buff), 0.001f);
-            printf("GR set to %f\r\n", GR);
-            break;
-        case 'k':
-            KT = fmaxf(atof(fsmstate->cmd_buff), 0.0001f);
-            printf("KT set to %f\r\n", KT);
-            break;
-        case 'x':
-            KP_MAX = fmaxf(atof(fsmstate->cmd_buff), 0.0f);
-            printf("KP_MAX set to %f\r\n", KP_MAX);
-            break;
-        case 'd':
-            KD_MAX = fmaxf(atof(fsmstate->cmd_buff), 0.0f);
-            printf("KD_MAX set to %f\r\n", KD_MAX);
-            break;
-        case 'p':
-            P_MAX = fmaxf(atof(fsmstate->cmd_buff), 0.0f);
-            P_MIN = -P_MAX;
-            printf("P_MAX set to %f\r\n", P_MAX);
-            break;
-        case 'v':
-            V_MAX = fmaxf(atof(fsmstate->cmd_buff), 0.0f);
-            V_MIN = -V_MAX;
-            printf("V_MAX set to %f\r\n", V_MAX);
-            break;
-        default:
-            printf("\r\n '%c' not a valid command prefix\r\n\r\n", fsmstate->cmd_id);
-            break;
-    }
-
-    if (!preference_writer_ready(prefs)) { preference_writer_open(&prefs); }
-    preference_writer_flush(&prefs);
-    preference_writer_close(&prefs);
-    preference_writer_load(prefs);
-
-    enter_setup_state();
-
-    fsmstate->bytecount = 0;
-    fsmstate->cmd_id    = 0;
-    memset(fsmstate->cmd_buff, 0, sizeof(fsmstate->cmd_buff));
+void enable_motor(){
+    zero_commands(&motor);
+    drv_enable_gd(motor.gateDriver);
+    HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
 }
