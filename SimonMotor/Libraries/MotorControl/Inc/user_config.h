@@ -9,9 +9,28 @@
 #define INC_USER_CONFIG_H_
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
+/*
+PPAIRS
+GR
+KT
+E_ZERO_RAD
+M_ZERO_RAD
+I_CAL
+P_MIN
+P_MAX
+V_MIN
+V_MAX
+KP_MAX
+KD_MAX
+WINDING_RESISTANCE
+WINDING_INDUCTANCE
+
+PHASE_ORDER
+CAN_ID
+CAN_TIMEOUT
+CALIBRATION_DONE_FLAG
+*/
 
 
 #define I_BW                    __float_reg[2]                                  // Current loop bandwidth
@@ -24,7 +43,7 @@ extern "C" {
 #define I_MAX_CONT              __float_reg[9]                                  // Continuous max current
 #define PPAIRS					__float_reg[10]									// Number of motor pole-pairs
 #define R_PHASE					__float_reg[13]									// Single phase resistance
-#define KT						__float_reg[14]									// Torque Constant (N-m/A)
+#define KT						__float_reg[14]									// Torque Constant for the rotor (N-m/A) (note: this is the torque constant before the gear reducer, so the effective torque constant at the output shaft is KT*GR)
 #define R_TH					__float_reg[15]									// Thermal resistance (C/W)
 #define C_TH					__float_reg[16]									// Thermal mass (C/J)
 #define GR						__float_reg[17]									// Gear ratio
@@ -54,8 +73,37 @@ extern "C" {
 extern float __float_reg[];
 extern int __int_reg[];
 
-#ifdef __cplusplus
-}
-#endif
+typedef enum {
+    PARAM_PPAIRS             = 0,
+    PARAM_GR                 = 1,
+    PARAM_KT                 = 2,
+    PARAM_E_ZERO_RAD         = 3,
+    PARAM_M_ZERO_RAD         = 4,
+    PARAM_I_CAL              = 5,
+    PARAM_P_MIN              = 6,
+    PARAM_P_MAX              = 7,
+    PARAM_V_MIN              = 8,
+    PARAM_V_MAX              = 9,
+    PARAM_KP_MAX             = 10,
+    PARAM_KD_MAX             = 11,
+    PARAM_WINDING_RESISTANCE = 12,
+    PARAM_PHASE_ORDER        = 13,
+    PARAM_CAN_ID             = 14,
+    PARAM_CAN_TIMEOUT        = 15,
+    PARAM_CALIBRATION_DONE   = 16,
+    PARAM_COUNT              = 17,
+} param_id_t;
+
+/* Returns the parameter as a float (ints are cast). Returns false if id is out of range. */
+void user_config_get_param(param_id_t id, float *out);
+
+/* Apply defaults only to fields that are uninitialized (erased flash reads as -1/NaN).
+   Call this once after preference_writer_load() on boot. */
+void user_config_apply_defaults(void);
+
+/* Unconditionally reset every parameter to its default value.
+   Call this for a factory reset, then open/flush/close the preference_writer. */
+void user_config_set_defaults(void);
+
 
 #endif /* INC_USER_CONFIG_H_ */

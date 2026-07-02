@@ -179,25 +179,27 @@ void unpack_cmd(CANRxMessage msg, float *commands){// ControllerStruct * control
     commands[4] = uint_to_float(t_int, -I_MAX*KT*GR, I_MAX*KT*GR, 12);
 }
 
+static void pack_param_reply(CANTxMessage *msg, uint8_t id, uint8_t param_index) {
+    float value = 0.0f;
+    user_config_get_param((param_id_t)param_index, &value);
+    uint32_t bits;
+    memcpy(&bits, &value, 4);
+    msg->data[0] = id;
+    msg->data[1] = param_index;
+    msg->data[2] = (bits >> 24) & 0xFF;
+    msg->data[3] = (bits >> 16) & 0xFF;
+    msg->data[4] = (bits >>  8) & 0xFF;
+    msg->data[5] =  bits        & 0xFF;
+    msg->data[6] = 0;
+    msg->data[7] = 0;
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 
-    // store message into message_received.data
     HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &message_received.rx_header, message_received.data);
 
-    /* pack reply: can_id, position (rad), velocity (rad/s), estimated torque (N-m), vbus (V), motor temp (C) */
-    pack_reply(&message_to_send, CAN_ID, motor.angle_sensor.mech_angle_rad, motor.angle_sensor.mech_angle_vel, motor.iq*KT*GR, motor.v_bus, motor.motor_temp);
-    
-    // send can frame
-    HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
-
-    /* Special commands: first 7 bytes all 0xFF, last byte selects command
-    *  memcmp compares two blocks of memory byte-by-byte and returns 0 if they're identical.
-    *  First argument: the start of your CAN data array
-    *  Second argument: a 7-byte string literal where every byte is 0xFF
-    *  Third argument: how many bytes to compare (7)
-    */
-    bool first_seven_bytes_all_ones = (memcmp(message_received.data, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 7) == 0);
-    if (first_seven_bytes_all_ones) {
+    /* Mode switch: [FF FF FF FF FF FF FF][mode 0-6] */
+    if (memcmp(message_received.data, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 7) == 0) {
         uint8_t mode = message_received.data[7];
         if (mode <= L_MEAS_MODE) {
             motor.cmd.pending_fsm_cmd = mode;
@@ -205,7 +207,17 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
         return;
     }
 
-    /* Regular MIT position/velocity/gain command */
+    /* Param read: [FF FF FF FF FF FF FE][param_index]
+     * Reply: [CAN_ID][param_index][float bytes 3..0][0][0] */
+    if (memcmp(message_received.data, "\xFF\xFF\xFF\xFF\xFF\xFF\xFE", 7) == 0) {
+        pack_param_reply(&message_to_send, CAN_ID, message_received.data[7]);
+        HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
+        return;
+    }
+
+    /* Regular MIT position/velocity/gain command — reply with motor state */
+    pack_reply(&message_to_send, CAN_ID, motor.angle_sensor.mech_angle_rad, motor.angle_sensor.mech_angle_vel, motor.iq*KT*GR, motor.v_bus, motor.motor_temp);
+    HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
     if (message_received.rx_header.DLC == 8) {
         unpack_cmd(message_received, (float *)motor.cmd.cmd_buf.commands);
         motor.cmd.new_cmd = 1;

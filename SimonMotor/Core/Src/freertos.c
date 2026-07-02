@@ -55,8 +55,8 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 extern PMSM_motor       motor;
-extern CalStruct   hcal;
-extern FSMStruct   hfsm;
+extern CalStruct        hcal;
+extern FSMStruct        hfsm;
 extern PreferenceWriter prefs;
 
 /* FOC loop timing instrumentation (set in HAL_ADCEx_InjectedConvCpltCallback) */

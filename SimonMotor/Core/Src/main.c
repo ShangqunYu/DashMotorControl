@@ -110,35 +110,7 @@ int main(void)
   /* USER CODE BEGIN Init */
   preference_writer_init(&prefs, 6);
   preference_writer_load(prefs);
-  if(E_ZERO==-1){E_ZERO = 0;}
-  if(M_ZERO==-1){M_ZERO = 0;}
-  if(isnan(I_BW) || I_BW==-1){I_BW = 1000;}
-  if(isnan(I_MAX) || I_MAX ==-1){I_MAX=40;}
-  I_MAX = 60.0f;
-  if(isnan(I_FW_MAX) || I_FW_MAX ==-1){I_FW_MAX=0;}
-  if(CAN_ID==-1){CAN_ID = 1;}
-  CAN_ID = 1;
-  if(CAN_MASTER==-1){CAN_MASTER = 0;}
-  if(CAN_TIMEOUT==-1){CAN_TIMEOUT = 10000;}
-  if(isnan(R_NOMINAL) || R_NOMINAL==-1){R_NOMINAL = 0.0f;}
-  // if(isnan(TEMP_MAX) || TEMP_MAX==-1){TEMP_MAX = 125.0f;}
-  if(isnan(I_MAX_CONT) || I_MAX_CONT==-1){I_MAX_CONT = 14.0f;}
-  if(isnan(I_CAL)||I_CAL==-1){I_CAL = 2.0f;}
-  I_CAL=10.0f;
-  if(isnan(PPAIRS) || PPAIRS==-1){PPAIRS = 21.0f;}
-  if(isnan(GR) || GR==-1){GR = 1.0f;}
-  GR = 18.0f;
-  if(isnan(KT) || KT==-1){KT = 1.0f;}
-  float KT_AFTER_REDUCER = 2.97f;
-  KT = KT_AFTER_REDUCER/GR;
-  if(isnan(KP_MAX) || KP_MAX==-1){KP_MAX = 500.0f;}
-  if(isnan(KD_MAX) || KD_MAX==-1){KD_MAX = 5.0f;}
-  if(isnan(P_MAX)){P_MAX = 12.57f;}
-  if(isnan(P_MIN)){P_MIN = -12.57f;}
-  if(isnan(V_MAX)){V_MAX = 65.0f;}
-  if(isnan(V_MIN)){V_MIN = -65.0f;}
-  if(isnan(E_ZERO_RAD)){E_ZERO_RAD = 0.0f;}
-  if(isnan(M_ZERO_RAD)){M_ZERO_RAD = 0.0f;}
+  user_config_apply_defaults();
   
   /* USER CODE END Init */
 
@@ -299,7 +271,7 @@ void SystemClock_Config(void)
   }
 }
 
-
+/* USER CODE BEGIN 4 */
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
@@ -307,6 +279,8 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
     HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
   }
 }
+
+
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if (hadc->Instance == ADC1) {
   }

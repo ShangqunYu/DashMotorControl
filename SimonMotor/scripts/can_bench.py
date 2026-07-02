@@ -29,7 +29,7 @@ import can
 CHANNEL   = sys.argv[1]         if len(sys.argv) > 1 else "can0"
 CAN_ID    = int(sys.argv[2])    if len(sys.argv) > 2 else 1
 DURATION  = float(sys.argv[3])  if len(sys.argv) > 3 else 10.0
-TARGET_HZ = float(sys.argv[4])  if len(sys.argv) > 4 else 200.0   # 0 = unlimited
+TARGET_HZ = float(sys.argv[4])  if len(sys.argv) > 4 else 500.0   # 0 = unlimited
 SINE_AMP  = float(sys.argv[5])  if len(sys.argv) > 5 else 0.6     # 0 = fixed command
 SINE_HZ   = 1.0
 
@@ -124,11 +124,16 @@ def main():
 
     # ── RX thread ────────────────────────────────────────────────────────────
     def rx_loop():
-        while not stop.is_set():
-            msg = bus.recv(timeout=0.1)
+        while True:
+            try:
+                msg = bus.recv(timeout=0.1)
+            except Exception:
+                break                          # socket shut down
             if msg is not None and len(msg.data) >= 6:
                 with lock:
                     rx_times.append(time.perf_counter())
+            if stop.is_set() and msg is None:
+                break                          # stop set + recv timed out → nothing in-flight
 
     send_mode(bus, MIT_MODE)
     time.sleep(0.05)
@@ -144,6 +149,8 @@ def main():
     print(f"Benchmarking for {DURATION:.0f} s  (target: {rate_str},  cmd: {cmd_str}) ...")
     print()
 
+    t_end = None
+
     try:
         while time.perf_counter() - t_start < DURATION:
             time.sleep(0.1)
@@ -154,21 +161,21 @@ def main():
                     n_tx = len(tx_times)
                     n_rx = len(rx_times)
                 print(f"  {elapsed:4.1f}s  TX {n_tx/elapsed:6.0f} Hz  "
-                      f"RX {n_rx/elapsed:6.0f} Hz  "
-                      f"drops {n_tx - n_rx:4d}")
+                      f"RX {n_rx/elapsed:6.0f} Hz")
                 t_status = now
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:
+        t_end = time.perf_counter()
         stop.set()
-        time.sleep(0.15)
+        time.sleep(0.05)   # drain in-flight frames before shutdown (max RTT ~2 ms)
         try:
             send_mode(bus, MENU_MODE)
         except Exception:
             pass
         bus.shutdown()
 
-    elapsed = time.perf_counter() - t_start
+    elapsed = t_end - t_start
 
     with lock:
         tx_list = list(tx_times)
