@@ -45,9 +45,15 @@ typedef struct {
 } MOTOR_CMD;
 
 typedef struct {
+    motor_state curr_state;
+    motor_state next_state;
+} FSMStruct;
+
+typedef struct {
 	AngleSensor_t angle_sensor;  /* MA732 + all angle/velocity state */
     CurrentSensor current_sensor;
 	MOTOR_CMD cmd;
+	FSMStruct fsm;
 	GateDriver gateDriver;
 
 	float max_current;

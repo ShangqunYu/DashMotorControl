@@ -68,9 +68,6 @@ PreferenceWriter prefs;
 
 PMSM_motor motor;
 CalStruct hcal;
-// CANTxMessage can_tx;
-// CANRxMessage can_rx;
-FSMStruct hfsm;
 
 /* FOC loop timing instrumentation (DWT cycle counter) */
 volatile uint32_t foc_loop_cycles_min = 0xFFFFFFFFu;
@@ -180,8 +177,8 @@ int main(void)
   pid_set_deadband(&motor.iq_ctrl, 0.0001f);
 
   	// current sensor
-  hfsm.curr_state = MENU_MODE;
-  hfsm.next_state = MENU_MODE;
+  motor.fsm.curr_state = MENU_MODE;
+  motor.fsm.next_state = MENU_MODE;
   CurrentSensor_init(&motor.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
 	HAL_ADCEx_InjectedStart_IT(&hadc1);
 	HAL_ADCEx_InjectedStart_IT(&hadc2);
@@ -189,9 +186,7 @@ int main(void)
   HAL_Delay(50);
 
   drv_enable_gd(motor.gateDriver);
-  htim1.Instance->CCR1 = 0u;
-  htim1.Instance->CCR2 = 0u;
-  htim1.Instance->CCR3 = 0u;
+  set_pwm_dtc(&motor, 0.0f, 0.0f, 0.0f);
   CurrentSensor_calibrate(&motor.current_sensor, 1000U);
   printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
          motor.current_sensor.adc_a_offset, motor.current_sensor.adc_b_offset, motor.current_sensor.adc_c_offset);
@@ -294,7 +289,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
 
     uint32_t cyc_start = DWT->CYCCNT;
 
-    run_fsm(&hfsm);
+    run_fsm(&motor.fsm);
     
     uint32_t cycles = DWT->CYCCNT - cyc_start;
     if (cycles < foc_loop_cycles_min) foc_loop_cycles_min = cycles;

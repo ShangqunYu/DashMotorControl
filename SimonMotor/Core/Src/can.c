@@ -128,6 +128,7 @@ CANRxMessage message_received;
 CANTxMessage message_to_send;
 uint32_t tx_mailbox;
 extern PMSM_motor motor;
+volatile uint8_t  can_pending_save = 0;
 
 void init_can_rx_filter() {
     message_to_send.tx_header.DLC   = 8;
@@ -195,30 +196,48 @@ static void pack_param_reply(CANTxMessage *msg, uint8_t id, uint8_t param_index)
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-
     HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &message_received.rx_header, message_received.data);
 
-    /* Mode switch: [FF FF FF FF FF FF FF][mode 0-6] */
-    if (memcmp(message_received.data, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 7) == 0) {
-        uint8_t mode = message_received.data[7];
-        if (mode <= L_MEAS_MODE) {
-            motor.cmd.pending_fsm_cmd = mode;
+    uint8_t *d   = message_received.data;
+    int      dlc = message_received.rx_header.DLC;
+
+    /* [FF×7][cmd] — mode switch, always allowed */
+    if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFF) {
+        if (d[7] <= L_MEAS_MODE) motor.cmd.pending_fsm_cmd = d[7];
+        return;
+    }
+
+    if (motor.fsm.curr_state == MENU_MODE) {
+        /* [FF×6][FE][idx] — param read */
+        if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFE) {
+            pack_param_reply(&message_to_send, CAN_ID, d[7]);
+            HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
+            return;
         }
-        return;
+        /* [FF][FF][FD][idx][b3 b2 b1 b0] — param write; idx=0xFF → factory reset */
+        if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFD) {
+            uint8_t idx = d[3];
+            if (idx == 0xFF) {
+                user_config_set_defaults();
+            } else {
+                uint32_t bits = ((uint32_t)d[4] << 24) | ((uint32_t)d[5] << 16)
+                              | ((uint32_t)d[6] <<  8) |  (uint32_t)d[7];
+                float value;
+                memcpy(&value, &bits, 4);
+                user_config_set_param((param_id_t)idx, value);
+            }
+            can_pending_save = 1;
+            pack_param_reply(&message_to_send, CAN_ID, idx);
+            HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
+            return;
+        }
     }
 
-    /* Param read: [FF FF FF FF FF FF FE][param_index]
-     * Reply: [CAN_ID][param_index][float bytes 3..0][0][0] */
-    if (memcmp(message_received.data, "\xFF\xFF\xFF\xFF\xFF\xFF\xFE", 7) == 0) {
-        pack_param_reply(&message_to_send, CAN_ID, message_received.data[7]);
-        HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
-        return;
-    }
-
-    /* Regular MIT position/velocity/gain command — reply with motor state */
-    pack_reply(&message_to_send, CAN_ID, motor.angle_sensor.mech_angle_rad, motor.angle_sensor.mech_angle_vel, motor.iq*KT*GR, motor.v_bus, motor.motor_temp);
+    /* MIT position/velocity/gain command */
+    pack_reply(&message_to_send, CAN_ID, motor.angle_sensor.mech_angle_rad,
+               motor.angle_sensor.mech_angle_vel, motor.iq*KT*GR, motor.v_bus, motor.motor_temp);
     HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
-    if (message_received.rx_header.DLC == 8) {
+    if (dlc == 8) {
         unpack_cmd(message_received, (float *)motor.cmd.cmd_buf.commands);
         motor.cmd.new_cmd = 1;
     }

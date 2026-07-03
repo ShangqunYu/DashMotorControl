@@ -21,7 +21,7 @@
 
 /* Magnetic encoder */
 #define ENC_SPI			    hspi3				// Encoder SPI handle
-#define USE_EXTERNAL_ENCODER 0		// Set to 1 to use external SPI encoder, 0 to use internal SPI encoder (on same SPI bus as DRV)
+#define USE_EXTERNAL_ENCODER 1		// Set to 1 to use external SPI encoder, 0 to use internal SPI encoder (on same SPI bus as DRV)
 #define ENC_CS_INT			GPIOA, GPIO_PIN_15	// INTERNAL Encoder SPI CS pin
 #define ENC_CS_EXT			GPIOD, GPIO_PIN_2	// External Encoder SPI CS pin
 #if USE_EXTERNAL_ENCODER

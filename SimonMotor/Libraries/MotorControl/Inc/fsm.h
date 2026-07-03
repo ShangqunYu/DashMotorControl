@@ -13,15 +13,6 @@
 #include <stdint.h>
 #include "PMSM_motor.h"   /* motor_state */
 
-/* ── FSM state struct ─────────────────────────────────────────────────────
- * curr_state : currently executing state
- * next_state : requested next state (written by CAN ISR via motor.pending_fsm_cmd)
- */
-typedef struct {
-    motor_state curr_state;
-    motor_state next_state;
-} FSMStruct;
-
 /* ── Public API ──────────────────────────────────────────────────────────── */
 void run_fsm(FSMStruct *fsmstate);
 void fsm_enter_state(FSMStruct *fsmstate);

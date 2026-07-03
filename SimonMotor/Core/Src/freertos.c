@@ -56,8 +56,8 @@
 /* USER CODE BEGIN Variables */
 extern PMSM_motor       motor;
 extern CalStruct        hcal;
-extern FSMStruct        hfsm;
 extern PreferenceWriter prefs;
+extern volatile uint8_t can_pending_save;
 
 /* FOC loop timing instrumentation (set in HAL_ADCEx_InjectedConvCpltCallback) */
 extern volatile uint32_t foc_loop_cycles_min;
@@ -175,12 +175,17 @@ void startMotorMgrTask(void *argument)
       drv_print_faults(motor.gateDriver);
     }
 
-    if (hfsm.curr_state == SET_ZERO_MODE) {
+    if (can_pending_save) {
+      can_pending_save = 0;
+      osSemaphoreRelease(flash_write_sem);
+    }
+
+    if (motor.fsm.curr_state == SET_ZERO_MODE) {
       angle_sensor_set_m_zero(&motor.angle_sensor);
       M_ZERO_RAD = motor.angle_sensor.m_zero;
       osSemaphoreRelease(flash_write_sem);
       printf("Mechanical zero set: m_zero=%.4f rad\r\n", motor.angle_sensor.m_zero);
-      hfsm.next_state = MENU_MODE;
+      motor.fsm.next_state = MENU_MODE;
     }
 
     if (hcal.cal_state == CAL_STATE_LUT_POSTPROC_PENDING) {
@@ -195,7 +200,7 @@ void startMotorMgrTask(void *argument)
       printf("LUT calibration complete, saved to flash\r\n");
     }
 
-    if (hfsm.curr_state == ENCODER_MODE) {
+    if (motor.fsm.curr_state == ENCODER_MODE) {
       // printf("m_angle_raw:  %.4f rad\r\n", motor.angle_sensor.s_rotor_rad_raw);
       printf("m_angle_comp: %.4f rad\r\n", motor.angle_sensor.s_rotor_rad);
     }
