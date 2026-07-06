@@ -27,21 +27,21 @@ import collections
 import can
 
 CHANNEL   = sys.argv[1]         if len(sys.argv) > 1 else "can0"
-CAN_ID    = int(sys.argv[2])    if len(sys.argv) > 2 else 1
-DURATION  = float(sys.argv[3])  if len(sys.argv) > 3 else 10.0
+CFG_CAN_ID    = int(sys.argv[2])    if len(sys.argv) > 2 else 1
+DURATION  = float(sys.argv[3])  if len(sys.argv) > 3 else 500.0
 TARGET_HZ = float(sys.argv[4])  if len(sys.argv) > 4 else 500.0   # 0 = unlimited
 SINE_AMP  = float(sys.argv[5])  if len(sys.argv) > 5 else 0.6     # 0 = fixed command
-SINE_HZ   = 1.0
+SINE_HZ   = 0.8
 
 MENU_MODE = 0
 MIT_MODE  = 2
 
-P_MIN, P_MAX = -12.5,  12.5
-V_MIN, V_MAX = -45.0,  45.0
-KP_MAX       =  500.0
-KD_MAX       =  5.0
+CFG_P_MIN, CFG_P_MAX = -12.57,  12.57
+CFG_V_MIN, CFG_V_MAX = -65.0,  65.0
+CFG_KP_MAX       =  500.0
+CFG_KD_MAX       =  5.0
 T_MIN, T_MAX = -18.0,  18.0
-kp = 40.0
+kp = 20.0
 kd = 0.5
 
 
@@ -51,10 +51,10 @@ def float_to_uint(x, x_min, x_max, bits):
 
 
 def pack_cmd(p, v, kp, kd, t_ff):
-    p_int  = float_to_uint(p,    P_MIN, P_MAX,  16)
-    v_int  = float_to_uint(v,    V_MIN, V_MAX,  12)
-    kp_int = float_to_uint(kp,   0,     KP_MAX, 12)
-    kd_int = float_to_uint(kd,   0,     KD_MAX, 12)
+    p_int  = float_to_uint(p,    CFG_P_MIN, CFG_P_MAX,  16)
+    v_int  = float_to_uint(v,    CFG_V_MIN, CFG_V_MAX,  12)
+    kp_int = float_to_uint(kp,   0,     CFG_KP_MAX, 12)
+    kd_int = float_to_uint(kd,   0,     CFG_KD_MAX, 12)
     t_int  = float_to_uint(t_ff, T_MIN, T_MAX,  12)
     return bytes([
         p_int >> 8,
@@ -73,14 +73,14 @@ CMD_BYTES = pack_cmd(0.0, 0.0, 0.0, 0.1, 0.0)   # hold zero, light damping
 
 def send_mode(bus, mode):
     bus.send(can.Message(
-        arbitration_id=CAN_ID,
+        arbitration_id=CFG_CAN_ID,
         data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, mode],
         is_extended_id=True,
     ), timeout=0.2)
 
 
 def main():
-    print(f"Opening {CHANNEL}, id={CAN_ID} ...")
+    print(f"Opening {CHANNEL}, id={CFG_CAN_ID} ...")
     try:
         bus = can.interface.Bus(channel=CHANNEL, interface="socketcan")
     except Exception as exc:
@@ -95,7 +95,7 @@ def main():
     # ── TX thread ────────────────────────────────────────────────────────────
     def tx_loop():
         next_send = time.perf_counter()
-        msg = can.Message(arbitration_id=CAN_ID, data=CMD_BYTES, is_extended_id=True)
+        msg = can.Message(arbitration_id=CFG_CAN_ID, data=CMD_BYTES, is_extended_id=True)
         while not stop.is_set():
             now = time.perf_counter()
             if interval > 0:
@@ -109,7 +109,7 @@ def main():
                 pos = SINE_AMP * math.sin(2 * math.pi * SINE_HZ * elapsed)
                 vel = SINE_AMP * 2 * math.pi * SINE_HZ * math.cos(2 * math.pi * SINE_HZ * elapsed)
                 msg = can.Message(
-                    arbitration_id=CAN_ID,
+                    arbitration_id=CFG_CAN_ID,
                     data=pack_cmd(pos, vel, kp, kd, 0.0),
                     is_extended_id=True,
                 )

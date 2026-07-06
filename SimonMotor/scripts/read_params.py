@@ -34,7 +34,7 @@ import can
 args = sys.argv[1:]
 
 CHANNEL = "can0"
-CAN_ID  = 1
+CFG_CAN_ID  = 1
 MODE    = "read"      # "read" | "write" | "reset"
 WRITE_NAME  = None
 WRITE_VALUE = None
@@ -51,7 +51,7 @@ while i < len(args):
         i += 1
     elif not args[i].startswith("--"):
         if   i == 0: CHANNEL = args[i]
-        elif i == 1: CAN_ID  = int(args[i])
+        elif i == 1: CFG_CAN_ID  = int(args[i])
         i += 1
     else:
         i += 1
@@ -59,23 +59,31 @@ while i < len(args):
 # ── param table ───────────────────────────────────────────────────────────────
 # (index, name, unit)  — index mirrors param_id_t in user_config.h
 PARAMS = [
-    (10,        "PPAIRS",             "pole pairs"),
-    (13,        "WINDING_RESISTANCE", "Ω"),
-    (14,        "KT",                 "N·m/A  (rotor, before GR)"),
-    (17,        "GR",                 "gear ratio"),
-    (18,        "I_CAL",              "A"),
-    (19,        "P_MIN",              "rad"),
-    (20,        "P_MAX",              "rad"),
-    (21,        "V_MIN",              "rad/s"),
-    (22,        "V_MAX",              "rad/s"),
-    (23,        "KP_MAX",             "N·m/rad"),
-    (24,        "KD_MAX",             "N·m·s/rad"),
-    (25,        "E_ZERO_RAD",         "rad"),
-    (26,        "M_ZERO_RAD",         "rad"),
-    (0x80 | 0,  "PHASE_ORDER",        ""),
-    (0x80 | 1,  "CAN_ID",             ""),
-    (0x80 | 3,  "CAN_TIMEOUT",        "ms"),
-    (0x80 | 6,  "CALIBRATION_DONE",   ""),
+    (0,         "CFG_PPAIRS",             "pole pairs"),
+    (1,         "CFG_GR",                  "gear ratio"),
+    (2,         "CFG_KT",                 "N·m/A  (rotor, before GR)"),
+    (3,         "CFG_E_ZERO_RAD",         "rad"),
+    (4,         "CFG_M_ZERO_RAD",         "rad"),
+    (5,         "CFG_I_MAX",              "A"),
+    (6,         "CFG_P_MIN",              "rad"),
+    (7,         "CFG_P_MAX",              "rad"),
+    (8,         "CFG_V_MIN",              "rad/s"),
+    (9,         "CFG_V_MAX",              "rad/s"),
+    (10,        "CFG_KP_MAX",             "kP"),
+    (11,        "CFG_KD_MAX",             "kD"),
+    (12,        "CFG_I_CAL",              "A"),
+    (13,        "CFG_KP_DQ",              "kp on d/q axes"),
+    (14,        "CFG_KI_DQ",              "ki on d/q axes"),
+    (15,        "CFG_TEMP_MIN",             "°C"),
+    (16,        "CFG_TEMP_MAX",             "°C"),
+    (17,        "CFG_RESISTANCE", "Ω"),
+    (18,        "CFG_INDUCTANCE", "H"),
+    (0x80 | 0,  "CFG_ENC_SEL",            "0=internal,1=external"),
+    (0x80 | 1,  "CFG_PHASE_ORDER",        "0 same order as encoder, 1 reversed"),
+    (0x80 | 2,  "CFG_CAN_ID",             ""),
+    (0x80 | 3,  "CFG_CAN_MASTER",             ""),
+    (0x80 | 4,  "CFG_CAN_TIMEOUT",        "ms"),
+    (0x80 | 5,  "CALIBRATION_DONE",   ""),
 ]
 
 PARAM_BY_NAME = {name: idx for idx, name, _ in PARAMS}
@@ -87,7 +95,7 @@ TIMEOUT   = 0.15
 # ── CAN helpers ───────────────────────────────────────────────────────────────
 def send_mode(bus, mode):
     bus.send(can.Message(
-        arbitration_id=CAN_ID,
+        arbitration_id=CFG_CAN_ID,
         data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, mode],
         is_extended_id=True,
     ), timeout=0.2)
@@ -95,7 +103,7 @@ def send_mode(bus, mode):
 
 def send_param_read(bus, param_index):
     bus.send(can.Message(
-        arbitration_id=CAN_ID,
+        arbitration_id=CFG_CAN_ID,
         data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE, param_index],
         is_extended_id=True,
     ), timeout=0.2)
@@ -103,12 +111,12 @@ def send_param_read(bus, param_index):
 
 def send_param_write(bus, param_index, value):
     data = [0xFF, 0xFF, 0xFD, param_index] + list(struct.pack('>f', value))
-    bus.send(can.Message(arbitration_id=CAN_ID, data=data, is_extended_id=True), timeout=0.2)
+    bus.send(can.Message(arbitration_id=CFG_CAN_ID, data=data, is_extended_id=True), timeout=0.2)
 
 
 def send_factory_reset(bus):
     bus.send(can.Message(
-        arbitration_id=CAN_ID,
+        arbitration_id=CFG_CAN_ID,
         data=[0xFF, 0xFF, 0xFD, 0xFF, 0x00, 0x00, 0x00, 0x00],
         is_extended_id=True,
     ), timeout=0.2)
@@ -121,7 +129,7 @@ def recv_param_reply(bus, expected_index):
         msg = bus.recv(timeout=max(0.0, deadline - time.perf_counter()))
         if msg is None:
             break
-        if len(msg.data) >= 6 and msg.data[0] == CAN_ID and msg.data[1] == expected_index:
+        if len(msg.data) >= 6 and msg.data[0] == CFG_CAN_ID and msg.data[1] == expected_index:
             return struct.unpack('>f', bytes(msg.data[2:6]))[0]
     return None
 
@@ -132,7 +140,7 @@ def fmt_value(index, value):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 def main():
-    print(f"Opening {CHANNEL}, motor id={CAN_ID} ...")
+    print(f"Opening {CHANNEL}, motor id={CFG_CAN_ID} ...")
     try:
         bus = can.interface.Bus(channel=CHANNEL, interface="socketcan")
     except Exception as exc:

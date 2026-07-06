@@ -12,13 +12,15 @@
 #include <stdio.h>
 #include "spi.h"
 
+static GPIO_TypeDef *enc_cs_port;
+static uint16_t      enc_cs_pin;
 
 float MA732_get_rad(){
-    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_RESET);
     uint8_t spi_tx_buffer[] = {0,0};
     uint8_t spi_rx_buffer[2];
     HAL_SPI_TransmitReceive(&ENC_SPI, (uint8_t*)spi_tx_buffer, (uint8_t *)spi_rx_buffer, 1, 1000);
-    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_SET);
     const uint16_t raw_data = ((uint16_t)spi_rx_buffer[1] << 8) | spi_rx_buffer[0];
     float angle_scale_factor = 0.00038349519824f;   // 2π / 16384 (14-bit)
     float angle_raw = (float)(raw_data >> 2) * angle_scale_factor;
@@ -27,17 +29,17 @@ float MA732_get_rad(){
 
 AngleSensor_t angle_sensor_init() {
     AngleSensor_t angle_sensor;
-	angle_sensor.e_zero = E_ZERO_RAD;
-    angle_sensor.m_zero = M_ZERO_RAD;
-	angle_sensor.sensor_dir = PHASE_ORDER;
-    angle_sensor.pole_pairs      = (uint8_t)PPAIRS;
+	angle_sensor.e_zero = CFG_E_ZERO_RAD;
+    angle_sensor.m_zero = CFG_M_ZERO_RAD;
+	angle_sensor.sensor_dir = CFG_PHASE_ORDER;
+    angle_sensor.pole_pairs      = (uint8_t)CFG_PPAIRS;
     angle_sensor.mech_angle_rad  = 0;
     angle_sensor.mech_angle_vel  = 0;
     angle_sensor.e_rad           = 0;
     angle_sensor.first_sample    = 0;
     angle_sensor.lut_ready       = 0;
-    if (CALIBRATION_DONE_FLAG == 1) {
-        angle_sensor_load_lut(&angle_sensor, (const float *)&ENCODER_LUT, ERROR_LUT_SIZE);
+    if (CFG_CALIBRATION_DONE_FLAG == 1) {
+        angle_sensor_load_lut(&angle_sensor, (const float *)&CFG_ENCODER_LUT, ERROR_LUT_SIZE);
         printf("Encoder cal loaded: e_zero=%.4f, ppairs=%d, dir=%s\r\n",
             angle_sensor.e_zero, angle_sensor.pole_pairs,
             (angle_sensor.sensor_dir == REVERSE_DIR) ? "rev" : "norm");
@@ -51,12 +53,15 @@ AngleSensor_t angle_sensor_init() {
     angle_sensor.vel_hat        = 0;
     angle_sensor.obs_ready      = 0;
 
-    // if using external encoder, set cs pin high for the internal one to disable it and avoid interference
-    if(USE_EXTERNAL_ENCODER){
-        HAL_GPIO_WritePin(ENC_CS_INT, GPIO_PIN_SET);
+    if (CFG_ENC_SEL == 0) {
+        enc_cs_port = ENC_CS_INT_PORT;
+        enc_cs_pin  = ENC_CS_INT_PIN;
+    } else {
+        enc_cs_port = ENC_CS_EXT_PORT;
+        enc_cs_pin  = ENC_CS_EXT_PIN;
+        HAL_GPIO_WritePin(ENC_CS_INT, GPIO_PIN_SET);  /* deassert internal CS */
     }
-
-    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_SET);
 
       /* MA732 setup */
     for (int i=0; i<20; i++) {
@@ -141,7 +146,7 @@ void angle_sensor_update_position(AngleSensor_t *sensor) {
     if (sensor->sensor_dir == REVERSE_DIR)
         sensor->multi_rotor_rad = -sensor->multi_rotor_rad;
 
-    sensor->mech_angle_rad = sensor->multi_rotor_rad * (1.0f / GR);
+    sensor->mech_angle_rad = sensor->multi_rotor_rad * (1.0f / CFG_GR);
 
     // Electrical angle (from e_zero, not m_zero — FOC must stay anchored to e_zero)
     float e_rad = angle_from_ezero * (float)sensor->pole_pairs;
@@ -173,7 +178,7 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor)
         vel = 0.0f;
 
     sensor->rotor_vel = vel;
-    sensor->mech_angle_vel = vel / GR;
+    sensor->mech_angle_vel = vel / CFG_GR;
 }
 
 

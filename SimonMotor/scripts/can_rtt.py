@@ -17,7 +17,7 @@ import time
 import can
 
 CHANNEL = sys.argv[1]       if len(sys.argv) > 1 else "can0"
-CAN_ID  = int(sys.argv[2])  if len(sys.argv) > 2 else 1
+CFG_CAN_ID  = int(sys.argv[2])  if len(sys.argv) > 2 else 1
 SAMPLES = int(sys.argv[3])  if len(sys.argv) > 3 else 100
 
 MENU_MODE = 0
@@ -27,7 +27,7 @@ RECV_TIMEOUT = 0.05   # 50 ms — generous enough to never miss a reply
 
 def send_mode(bus, mode):
     bus.send(can.Message(
-        arbitration_id=CAN_ID,
+        arbitration_id=CFG_CAN_ID,
         data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, mode],
         is_extended_id=True,
     ), timeout=0.2)
@@ -35,14 +35,14 @@ def send_mode(bus, mode):
 
 # Zero-position command, light damping so the motor stays calm
 CMD = can.Message(
-    arbitration_id=CAN_ID,
+    arbitration_id=CFG_CAN_ID,
     data=[0x7F, 0xFF, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00],
     is_extended_id=True,
 )
 
 
 def main():
-    print(f"Opening {CHANNEL}, id={CAN_ID} ...")
+    print(f"Opening {CHANNEL}, id={CFG_CAN_ID} ...")
     try:
         bus = can.interface.Bus(channel=CHANNEL, interface="socketcan")
     except Exception as exc:

@@ -9,9 +9,22 @@
 #include "angle_sensor.h"
 #include "hw_config.h"
 #include "tim.h"
+#include "adc.h"
+#include "analog_sensor.h"
+#include "pid_utils.h"
+#include "math_utils.h"
+#include "drv8353.h"
 #include <math.h>
+#include <stdio.h>
 #include "user_config.h"
 #include "foc.h"
+
+
+
+
+
+
+
 
 void zero_commands(PMSM_motor *motor) {
     motor->id_ref = 0.0f;
@@ -46,7 +59,7 @@ void mit_control_update(PMSM_motor *motor){
     float pos_error = motor->cmd.curr_cmd.p_des - motor->angle_sensor.mech_angle_rad;
     float vel_error = motor->cmd.curr_cmd.v_des - motor->angle_sensor.mech_angle_vel;
     float torque_des = motor->cmd.curr_cmd.kp * pos_error + motor->cmd.curr_cmd.kd * vel_error + motor->cmd.curr_cmd.t_ff;
-    motor->iq_ref = torque_des * (1.0f / (KT*GR));
+    motor->iq_ref = torque_des * (1.0f / (CFG_KT*CFG_GR));
     // Cap iq_ref for safety
     motor->iq_ref = constrain(motor->iq_ref, -motor->max_current, motor->max_current);
 }
@@ -60,6 +73,51 @@ void open_loop_voltage_control(PMSM_motor *motor, float vd_ref, float vq_ref, fl
     abc(sin_theta, cos_theta, vd_ref, vq_ref, &va, &vb, &vc);
     svm(motor->v_bus, DTC_MIN, DTC_MAX, OVERMODULATION, va, vb, vc, &dtc_u, &dtc_v, &dtc_w);
     set_pwm_dtc(motor, 1.0f-dtc_u, 1.0f-dtc_v, 1.0f-dtc_w); // invert duty cycle because if you want current to flow, you need to drive low (sink current) not high (source current)   
+}
+
+void motor_init(PMSM_motor *motor) {
+
+    /* Gate Driver DRV8353 setup */
+    drv_init(motor->gateDriver, CFG_I_MAX);
+
+    /* FOC sensor init */
+    motor->angle_sensor        = angle_sensor_init();
+    motor->cmd.pending_fsm_cmd = NO_PENDING_MODE;
+
+    /* Timer related */
+    HAL_TIM_PWM_Start(&TIM_PWM, PWM_A);
+    HAL_TIM_PWM_Start(&TIM_PWM, PWM_B);
+    HAL_TIM_PWM_Start(&TIM_PWM, PWM_C);
+    HAL_TIM_PWM_Start(&TIM_PWM, TIM_CHANNEL_4);
+    // shift ADC trigger to occur slightly before the PWM edge to allow for sampling during the deadtime
+    TIM_PWM.Instance->CCR4 = TIM_PWM.Instance->ARR - ADC_TRIG_OFFSET;
+
+    timer_init(motor, &TIM_PWM);
+    set_limit_current(motor, CFG_I_MAX);
+    init_trig_lut();
+
+    /* PI controller initialization for D/Q axis */
+    pid_init(&motor->id_ctrl, FOC_TS, CFG_KP_DQ, CFG_KI_DQ, 0.8f, 0.0001f);
+    pid_init(&motor->iq_ctrl, FOC_TS, CFG_KP_DQ, CFG_KI_DQ, 0.8f, 0.0001f);
+
+    motor->fsm.curr_state = MENU_MODE;
+    motor->fsm.next_state = MENU_MODE;
+
+    CurrentSensor_init(&motor->current_sensor,
+                       &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1),
+                       I_SCALE, 2048, 2048, 2048);
+    HAL_ADCEx_InjectedStart_IT(&hadc1);
+    HAL_ADCEx_InjectedStart_IT(&hadc2);
+    HAL_ADCEx_InjectedStart_IT(&hadc3);
+    HAL_Delay(50);
+
+    drv_enable_gd(motor->gateDriver);
+    set_pwm_dtc(motor, 0.0f, 0.0f, 0.0f);
+    CurrentSensor_calibrate(&motor->current_sensor, 1000U);
+    printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
+           motor->current_sensor.adc_a_offset,
+           motor->current_sensor.adc_b_offset,
+           motor->current_sensor.adc_c_offset);
 }
 
 void current_control_update(PMSM_motor *motor) {

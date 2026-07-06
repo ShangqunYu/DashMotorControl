@@ -115,6 +115,15 @@ float pid_control(PID_Controller_t *pid, float error) {
     return output;
 }
 
+void pid_init(PID_Controller_t *pid, float ts, float kp, float ki, float max_out_dynamic, float deadband) {
+    pid_reset(pid);
+    pid_set_ts(pid, ts);
+    pid_set_kp(pid, kp);
+    pid_set_ki(pid, ki);
+    pid_set_max_out_dynamic(pid, max_out_dynamic);
+    pid_set_deadband(pid, deadband);
+}
+
 void pid_reset(PID_Controller_t *p) {
 	p->integral = 0;
     p->last_error = 0.0f;

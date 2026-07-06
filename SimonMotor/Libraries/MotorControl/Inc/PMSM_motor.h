@@ -81,6 +81,7 @@ typedef struct {
 	uint8_t  l_meas_phase;           // 0 = collecting Ld, 1 = collecting Lq
 } PMSM_motor;
 
+void motor_init(PMSM_motor *motor);
 void zero_commands(PMSM_motor *motor);
 void set_limit_current(PMSM_motor *motor, float i_limit);
 void timer_init(PMSM_motor *motor, TIM_HandleTypeDef *htim);

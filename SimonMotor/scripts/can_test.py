@@ -1,7 +1,7 @@
 """
 Quick CAN connectivity test.
 
-Sends a mode-switch frame to CAN_ID (default 1) on can0, then listens for
+Sends a mode-switch frame to CFG_CAN_ID (default 1) on can0, then listens for
 the motor's reply frame and decodes it.
 
 Usage:
@@ -17,7 +17,7 @@ import sys
 import can
 
 CHANNEL = sys.argv[1] if len(sys.argv) > 1 else "can0"
-CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+CFG_CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
 # Mode bytes (must match state in PMSM_motor.h)
 MENU_MODE = 0
@@ -30,11 +30,11 @@ L_MEAS_MODE          = 6
 
 # Scaling ranges — must match flash-stored values on the motor
 # V_BUS and TEMP are hardcoded in hw_config.h; the rest are user-configurable
-P_MIN   = -12.5     # rad
-P_MAX   =  12.5     # rad
-V_MIN   = -45.0     # rad/s
-V_MAX   =  45.0     # rad/s
-T_MIN   = -18.0     # N-m  (I_MAX * KT * GR, negated)
+CFG_P_MIN   = -12.57     # rad
+CFG_P_MAX   =  12.57     # rad
+CFG_V_MIN   = -45.0     # rad/s
+CFG_V_MAX   =  45.0     # rad/s
+T_MIN   = -18.0     # N-m  (I_MAX * KT * CFG_GR, negated)
 T_MAX   =  18.0     # N-m
 
 
@@ -73,8 +73,8 @@ def receive_reply(bus, timeout=1.0):
     vb_int   = d[6]
     temp_int = d[7]
 
-    position = uint_to_float(p_int, P_MIN, P_MAX, 16)
-    velocity = uint_to_float(v_int, V_MIN, V_MAX, 12)
+    position = uint_to_float(p_int, CFG_P_MIN, CFG_P_MAX, 16)
+    velocity = uint_to_float(v_int, CFG_V_MIN, CFG_V_MAX, 12)
     torque   = uint_to_float(t_int, T_MIN, T_MAX, 12)
     vbus     = uint_to_float(vb_int, 0.0, 60.0, 8)
     temp     = uint_to_float(temp_int, -40.0, 125.0, 8)
@@ -95,7 +95,7 @@ def main():
         sys.exit(f"Failed to open {CHANNEL}: {exc}")
 
     try:
-        send_mode(bus, CAN_ID, CALIBRATION_MODE)
+        send_mode(bus, CFG_CAN_ID, CALIBRATION_MODE)
         receive_reply(bus)
     except Exception as exc:
         sys.exit(f"Error: {exc}")

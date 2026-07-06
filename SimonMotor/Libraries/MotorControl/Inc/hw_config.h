@@ -21,14 +21,13 @@
 
 /* Magnetic encoder */
 #define ENC_SPI			    hspi3				// Encoder SPI handle
-#define USE_EXTERNAL_ENCODER 1		// Set to 1 to use external SPI encoder, 0 to use internal SPI encoder (on same SPI bus as DRV)
-#define ENC_CS_INT			GPIOA, GPIO_PIN_15	// INTERNAL Encoder SPI CS pin
-#define ENC_CS_EXT			GPIOD, GPIO_PIN_2	// External Encoder SPI CS pin
-#if USE_EXTERNAL_ENCODER
-#define ENC_CS				ENC_CS_EXT
-#else
-#define ENC_CS				ENC_CS_INT
-#endif
+#define ENC_CS_INT_PORT     GPIOA
+#define ENC_CS_INT_PIN      GPIO_PIN_15         // INTERNAL Encoder SPI CS pin
+#define ENC_CS_EXT_PORT     GPIOD
+#define ENC_CS_EXT_PIN      GPIO_PIN_2          // EXTERNAL Encoder SPI CS pin
+/* Convenience two-arg forms (for HAL_GPIO_WritePin calls with a fixed target) */
+#define ENC_CS_INT          ENC_CS_INT_PORT, ENC_CS_INT_PIN
+#define ENC_CS_EXT          ENC_CS_EXT_PORT, ENC_CS_EXT_PIN
 #define ENC_CPR			65536				// Encoder counts per revolution
 #define INV_CPR			1.0f/ENC_CPR
 #define ENC_READ_WORD	0x0000				// Encoder read command
@@ -45,13 +44,10 @@
 
 #define BLDC_PWM_FREQ           40000
 #define FOC_TS                  (1.0f / (float)BLDC_PWM_FREQ)
-#define SPEED_CONTROL_CYCLE     10
-#define SPEED_TS                (FOC_TS * SPEED_CONTROL_CYCLE)
-#define EN_ENC_LINEARIZATION 1				// Enable/disable encoder linearization
+
 #define V_BUS_MIN           0.0f			// min drive voltage (faults below this)
 #define V_BUS_MAX			60.0f			// max drive voltage (faults above this)
-#define TEMP_MIN           -40.0f          // min temperature (C) (faults below this)
-#define TEMP_MAX           180.0f          // max temperature (C) (faults above this)
+
 
 /* Current controller */
 #define OVERMODULATION 1.0f        // 1.0 = no overmodulation

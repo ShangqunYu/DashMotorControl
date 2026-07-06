@@ -26,6 +26,7 @@ typedef struct {
     float mv;
 } PID_Controller_t;
 
+void pid_init(PID_Controller_t *pid, float ts, float kp, float ki, float max_out_dynamic, float deadband);
 float pi_control(PID_Controller_t *pi, float error);
 float pd_control(PID_Controller_t *pd, float error);
 float pid_control(PID_Controller_t *pid, float error);

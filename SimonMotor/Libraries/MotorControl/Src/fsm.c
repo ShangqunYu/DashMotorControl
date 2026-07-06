@@ -171,6 +171,8 @@ void fsm_exit_state(FSMStruct *fsmstate)
             break;
 
         case MENU_MODE:
+            break;
+
         case ENCODER_MODE:
         case SET_ZERO_MODE:
             break;

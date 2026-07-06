@@ -41,21 +41,19 @@ def _nanosleep(secs):
         _libc.nanosleep(ctypes.byref(ts), None)  # GIL released here
 
 CHANNEL = sys.argv[1] if len(sys.argv) > 1 else "can0"
-CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+CFG_CAN_ID  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
 # ── Mode bytes (must match PMSM_motor.h) ────────────────────────────────────────────
 MENU_MODE = 0
 MIT_MODE  = 5
 
 # ── Scaling ranges — must match flash-stored values on the motor ─────────────
-# P_MIN   = -12.5     # rad
-# P_MAX   =  12.5     # rad
-P_MAX = 12.57
-P_MIN = -P_MAX
-V_MIN   = -65.0     # rad/s
-V_MAX   =  65.0     # rad/s
-KP_MAX  =  500.0    # N-m/rad
-KD_MAX  =  5.0      # N-m·s/rad
+CFG_P_MAX = 12.57
+CFG_P_MIN = -CFG_P_MAX
+CFG_V_MIN   = -65.0     # rad/s
+CFG_V_MAX   =  65.0     # rad/s
+CFG_KP_MAX  =  500.0    # N-m/rad
+CFG_KD_MAX  =  5.0      # N-m·s/rad
 GR = 18.0
 KT_AFTER_REDUCER = 2.97
 KT = 2.97/GR
@@ -87,10 +85,10 @@ def uint_to_float(x, x_min, x_max, bits):
 
 
 def pack_cmd(p, v, kp, kd, t_ff):
-    p_int  = float_to_uint(p,    P_MIN,  P_MAX,  16)
-    v_int  = float_to_uint(v,    V_MIN,  V_MAX,  12)
-    kp_int = float_to_uint(kp,   0,      KP_MAX, 12)
-    kd_int = float_to_uint(kd,   0,      KD_MAX, 12)
+    p_int  = float_to_uint(p,    CFG_P_MIN,  CFG_P_MAX,  16)
+    v_int  = float_to_uint(v,    CFG_V_MIN,  CFG_V_MAX,  12)
+    kp_int = float_to_uint(kp,   0,      CFG_KP_MAX, 12)
+    kd_int = float_to_uint(kd,   0,      CFG_KD_MAX, 12)
     t_int  = float_to_uint(t_ff, T_MIN,  T_MAX,  12)
     return [
         p_int >> 8,
@@ -106,7 +104,7 @@ def pack_cmd(p, v, kp, kd, t_ff):
 
 def send_mode(bus, mode):
     bus.send(can.Message(
-        arbitration_id=CAN_ID,
+        arbitration_id=CFG_CAN_ID,
         data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, mode],
         is_extended_id=True,
     ), timeout=0.2)
@@ -120,8 +118,8 @@ def decode_reply(msg):
     v_int = (d[3] << 4) | (d[4] >> 4)
     t_int = ((d[4] & 0xF) << 8) | d[5]
     return (
-        uint_to_float(p_int, P_MIN, P_MAX, 16),
-        uint_to_float(v_int, V_MIN, V_MAX, 12),
+        uint_to_float(p_int, CFG_P_MIN, CFG_P_MAX, 16),
+        uint_to_float(v_int, CFG_V_MIN, CFG_V_MAX, 12),
         uint_to_float(t_int, T_MIN, T_MAX, 12),
         uint_to_float(d[6],  0.0,  60.0,   8),
         uint_to_float(d[7], -40.0, 125.0,  8),
@@ -281,7 +279,7 @@ def main():
             t_send = time.perf_counter()
             try:
                 bus.send(can.Message(
-                    arbitration_id=CAN_ID,
+                    arbitration_id=CFG_CAN_ID,
                     data=pack_cmd(des_pos, des_vel, KP, KD, torque_ff),
                     is_extended_id=True,
                 ), timeout=0.01)

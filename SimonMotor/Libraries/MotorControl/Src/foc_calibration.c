@@ -27,11 +27,11 @@
 #include <stdio.h>
 
 
-// Drive id=I_CAL, iq=0 at a forced electrical angle — used during calibration
+// Drive id=CFG_I_CAL, iq=0 at a forced electrical angle — used during calibration
 // sweeps so the PI loop regulates current instead of applying raw voltage.
 static void cal_force_current(PMSM_motor *motor, float angle_rad) {
     motor->angle_sensor.e_rad = angle_rad;
-    motor->id_ref = I_CAL;
+    motor->id_ref = CFG_I_CAL;
     motor->iq_ref = 0.0f;
     current_control_update(motor);
 }

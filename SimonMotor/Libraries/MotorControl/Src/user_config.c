@@ -32,44 +32,54 @@ void user_config_set_param(param_id_t id, float value) {
 }
 
 void user_config_set_defaults(void) {
-    I_MAX       = 60.0f;
-    I_CAL       = 10.0f;
-    PPAIRS      = 21.0f;
-    GR          = 18.0f;
-    KT          = KT_AFTER_REDUCER / GR;
-    KP_MAX      = 500.0f;
-    KD_MAX      = 5.0f;
-    P_MAX       = 12.57f;
-    P_MIN       = -12.57f;
-    V_MAX       = 65.0f;
-    V_MIN       = -65.0f;
-    E_ZERO_RAD  = 0.0f;
-    M_ZERO_RAD  = 0.0f;
-    memset(&__int_reg[7], 0, 128 * sizeof(int));  /* ENCODER_LUT */
+    CFG_PPAIRS                              = 21.0f;
+    CFG_GR                                  = 18.0f;
+    CFG_KT                                  = KT_AFTER_REDUCER / CFG_GR;
+    CFG_E_ZERO_RAD                          =   0.0f;
+    CFG_M_ZERO_RAD                          =   0.0f;
+    CFG_I_MAX                               =  60.0f;
+    CFG_P_MIN                               = -12.57f;
+    CFG_P_MAX                               =  12.57f;
+    CFG_V_MAX                               = 65.0f;
+    CFG_V_MIN                               = -65.0f;
+    CFG_KP_MAX                              = 500.0f;
+    CFG_KD_MAX                              = 5.0f;
+    CFG_I_CAL                               = 10.0f;
+    CFG_KP_DQ                               = 0.05f;
+    CFG_KI_DQ                               = 200.0f;
+    CFG_TEMP_MIN                            = -40.0f;
+    CFG_TEMP_MAX                            = 180.0f;
+    CFG_RESISTANCE                          = 0.05f;
+    CFG_INDUCTANCE                          = 0.00001f;
+    CFG_ENC_SEL                             = 0;  /* 1 = external encoder */
+    CFG_PHASE_ORDER                         = 0;  /* 1 = reverse phase order */
+    CFG_CAN_ID                              = 1;
+    CFG_CAN_MASTER                          = 0;
+    CFG_CAN_TIMEOUT                         = 10000;
+    CFG_CALIBRATION_DONE_FLAG               = 0;
 
-    CAN_ID      = 1;
-    CAN_MASTER  = 0;
-    CAN_TIMEOUT = 10000;
-    CALIBRATION_DONE_FLAG = 0;
+    memset(&__int_reg[7], 0, 128 * sizeof(int));  /* CFG_ENCODER_LUT */
     
 }
 
 void user_config_apply_defaults(void) {
-    if (isnan(I_MAX)      || I_MAX      == -1) I_MAX      = 60.0f;
-    if (isnan(I_CAL)      || I_CAL      == -1) I_CAL      = 10.0f;
-    if (isnan(PPAIRS)     || PPAIRS     == -1) PPAIRS     = 21.0f;
-    if (isnan(GR)         || GR         == -1) GR         = 18.0f;
-    if (isnan(KT)         || KT         == -1) KT         = KT_AFTER_REDUCER / GR;
-    if (isnan(KP_MAX)     || KP_MAX     == -1) KP_MAX     = 500.0f;
-    if (isnan(KD_MAX)     || KD_MAX     == -1) KD_MAX     = 5.0f;
-    if (isnan(P_MAX))                          P_MAX      = 12.57f;
-    if (isnan(P_MIN))                          P_MIN      = -12.57f;
-    if (isnan(V_MAX))                          V_MAX      = 65.0f;
-    if (isnan(V_MIN))                          V_MIN      = -65.0f;
-    if (isnan(E_ZERO_RAD))                     E_ZERO_RAD = 0.0f;
-    if (isnan(M_ZERO_RAD))                     M_ZERO_RAD = 0.0f;
+    if (isnan(CFG_I_MAX)      || CFG_I_MAX      == -1) CFG_I_MAX      = 60.0f;
+    if (isnan(CFG_I_CAL)      || CFG_I_CAL      == -1) CFG_I_CAL      = 10.0f;
+    if (isnan(CFG_PPAIRS)     || CFG_PPAIRS     == -1) CFG_PPAIRS     = 21.0f;
+    if (isnan(CFG_TEMP_MAX)   || CFG_TEMP_MAX  == -1)  CFG_TEMP_MAX  = 180.0f;
+    if (isnan(CFG_GR)         || CFG_GR         == -1) CFG_GR         = 18.0f;
+    if (isnan(CFG_KT)         || CFG_KT         == -1) CFG_KT         = KT_AFTER_REDUCER / CFG_GR;
+    if (isnan(CFG_KP_MAX)     || CFG_KP_MAX     == -1) CFG_KP_MAX     = 500.0f;
+    if (isnan(CFG_KD_MAX)     || CFG_KD_MAX     == -1) CFG_KD_MAX     = 5.0f;
+    if (isnan(CFG_P_MAX))                          CFG_P_MAX      = 12.57f;
+    if (isnan(CFG_P_MIN))                          CFG_P_MIN      = -12.57f;
+    if (isnan(CFG_V_MAX))                          CFG_V_MAX      = 65.0f;
+    if (isnan(CFG_V_MIN))                          CFG_V_MIN      = -65.0f;
+    if (isnan(CFG_E_ZERO_RAD))                     CFG_E_ZERO_RAD = 0.0f;
+    if (isnan(CFG_M_ZERO_RAD))                     CFG_M_ZERO_RAD = 0.0f;
 
-    if (CAN_ID      == -1) CAN_ID      = 1;
-    if (CAN_MASTER  == -1) CAN_MASTER  = 0;
-    if (CAN_TIMEOUT == -1) CAN_TIMEOUT = 10000;
+    if (CFG_ENC_SEL     == -1) CFG_ENC_SEL     = 1;
+    if (CFG_CAN_ID      == -1) CFG_CAN_ID      = 1;
+    if (CFG_CAN_MASTER  == -1) CFG_CAN_MASTER  = 0;
+    if (CFG_CAN_TIMEOUT == -1) CFG_CAN_TIMEOUT = 10000;
 }

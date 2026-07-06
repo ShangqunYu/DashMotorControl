@@ -108,6 +108,7 @@ int main(void)
   preference_writer_init(&prefs, 6);
   preference_writer_load(prefs);
   user_config_apply_defaults();
+  // user_config_set_defaults();
   
   /* USER CODE END Init */
 
@@ -140,56 +141,7 @@ int main(void)
   HAL_CAN_Start(&CAN_H); //  Start CAN peripheral
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
-  /* DRV8353 setup */
-  drv_init(motor.gateDriver, I_MAX);
-
-  /* FOC sensor init — must come before MA732 start so the LUT is active
-     from the very first SPI callback */
-  motor.angle_sensor        = angle_sensor_init();
-  motor.cmd.pending_fsm_cmd = NO_PENDING_MODE;
-
-
-  /* Turn on PWM */
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-
-  // shift ADC trigger to occur slightly before the PWM edge to allow for sampling during the deadtime
-  htim1.Instance->CCR4 = htim1.Instance->ARR - ADC_TRIG_OFFSET;
-
-  timer_init(&motor, &htim1);
-  set_limit_current(&motor, I_MAX);
-  init_trig_lut();
-
-  pid_reset(&motor.id_ctrl);
-  pid_set_ts(&motor.id_ctrl, FOC_TS);
-  pid_set_kp(&motor.id_ctrl, 0.05f);
-  pid_set_ki(&motor.id_ctrl, 200.0f);
-  pid_set_max_out_dynamic(&motor.id_ctrl, 0.8f);
-  pid_set_deadband(&motor.id_ctrl, 0.0001f);
-
-  pid_reset(&motor.iq_ctrl);
-  pid_set_ts(&motor.iq_ctrl, FOC_TS);
-  pid_set_kp(&motor.iq_ctrl, 0.05f);
-  pid_set_ki(&motor.iq_ctrl, 200.0f);
-  pid_set_max_out_dynamic(&motor.iq_ctrl, 0.8f);
-  pid_set_deadband(&motor.iq_ctrl, 0.0001f);
-
-  	// current sensor
-  motor.fsm.curr_state = MENU_MODE;
-  motor.fsm.next_state = MENU_MODE;
-  CurrentSensor_init(&motor.current_sensor, &(ADC1->JDR1), &(ADC2->JDR1), &(ADC3->JDR1), I_SCALE, 2048, 2048, 2048);
-	HAL_ADCEx_InjectedStart_IT(&hadc1);
-	HAL_ADCEx_InjectedStart_IT(&hadc2);
-	HAL_ADCEx_InjectedStart_IT(&hadc3);
-  HAL_Delay(50);
-
-  drv_enable_gd(motor.gateDriver);
-  set_pwm_dtc(&motor, 0.0f, 0.0f, 0.0f);
-  CurrentSensor_calibrate(&motor.current_sensor, 1000U);
-  printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
-         motor.current_sensor.adc_a_offset, motor.current_sensor.adc_b_offset, motor.current_sensor.adc_c_offset);
+  motor_init(&motor);
 
   /* USER CODE END 2 */
 
@@ -271,7 +223,8 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
   {
-    HAL_GPIO_WritePin(ENC_CS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(ENC_CS_INT, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(ENC_CS_EXT, GPIO_PIN_SET);
   }
 }
 

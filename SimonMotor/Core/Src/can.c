@@ -128,20 +128,20 @@ CANRxMessage message_received;
 CANTxMessage message_to_send;
 uint32_t tx_mailbox;
 extern PMSM_motor motor;
-volatile uint8_t  can_pending_save = 0;
+volatile uint8_t  pending_save = 0;
 
 void init_can_rx_filter() {
     message_to_send.tx_header.DLC   = 8;
     message_to_send.tx_header.IDE   = CAN_ID_EXT;
     message_to_send.tx_header.RTR   = CAN_RTR_DATA;
-    message_to_send.tx_header.StdId = CAN_MASTER;
+    message_to_send.tx_header.ExtId = CFG_CAN_MASTER;
 
     CAN_FilterTypeDef filter;
     filter.FilterActivation     = CAN_FILTER_ENABLE;
     filter.FilterBank           = 10;
     filter.FilterFIFOAssignment = CAN_RX_FIFO0;
-    filter.FilterIdHigh         = CAN_ID >> 13 & 0xFFFF;
-    filter.FilterIdLow          = CAN_ID << 3 & 0xFFF8;
+    filter.FilterIdHigh         = CFG_CAN_ID >> 13 & 0xFFFF;
+    filter.FilterIdLow          = CFG_CAN_ID << 3 & 0xFFF8;
     filter.FilterMaskIdHigh     = FILTER_MASK >> 13 & 0xFFFF;
     filter.FilterMaskIdLow      = FILTER_MASK << 3 & 0xFFF8;
     filter.FilterMode           = CAN_FILTERMODE_IDMASK;
@@ -151,11 +151,11 @@ void init_can_rx_filter() {
 }
 
 void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb, float temp){
-    int p_int = float_to_uint(p, P_MIN, P_MAX, 16);
-    int v_int = float_to_uint(v, V_MIN, V_MAX, 12);
-    int t_int = float_to_uint(t, -I_MAX*KT*GR, I_MAX*KT*GR, 12);
+    int p_int = float_to_uint(p, CFG_P_MIN, CFG_P_MAX, 16);
+    int v_int = float_to_uint(v, CFG_V_MIN, CFG_V_MAX, 12);
+    int t_int = float_to_uint(t, -CFG_I_MAX*CFG_KT*CFG_GR, CFG_I_MAX*CFG_KT*CFG_GR, 12);
     int vb_int = float_to_uint(vb, V_BUS_MIN, V_BUS_MAX, 8);
-    int temp_int = float_to_uint(temp, TEMP_MIN, TEMP_MAX, 8);
+    int temp_int = float_to_uint(temp, CFG_TEMP_MIN, CFG_TEMP_MAX, 8);
     msg->data[0] = id;
     msg->data[1] = p_int>>8;
     msg->data[2] = p_int&0xFF;
@@ -173,11 +173,11 @@ void unpack_cmd(CANRxMessage msg, float *commands){// ControllerStruct * control
     int kd_int = (msg.data[5]<<4)|(msg.data[6]>>4);
     int t_int = ((msg.data[6]&0xF)<<8)|msg.data[7];
 
-    commands[0] = uint_to_float(p_int, P_MIN, P_MAX, 16);
-    commands[1] = uint_to_float(v_int, V_MIN, V_MAX, 12);
-    commands[2] = uint_to_float(kp_int, 0, KP_MAX, 12);
-    commands[3] = uint_to_float(kd_int, 0, KD_MAX, 12);
-    commands[4] = uint_to_float(t_int, -I_MAX*KT*GR, I_MAX*KT*GR, 12);
+    commands[0] = uint_to_float(p_int, CFG_P_MIN, CFG_P_MAX, 16);
+    commands[1] = uint_to_float(v_int, CFG_V_MIN, CFG_V_MAX, 12);
+    commands[2] = uint_to_float(kp_int, 0, CFG_KP_MAX, 12);
+    commands[3] = uint_to_float(kd_int, 0, CFG_KD_MAX, 12);
+    commands[4] = uint_to_float(t_int, -CFG_I_MAX*CFG_KT*CFG_GR, CFG_I_MAX*CFG_KT*CFG_GR, 12);
 }
 
 static void pack_param_reply(CANTxMessage *msg, uint8_t id, uint8_t param_index) {
@@ -210,7 +210,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
     if (motor.fsm.curr_state == MENU_MODE) {
         /* [FF×6][FE][idx] — param read */
         if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFE) {
-            pack_param_reply(&message_to_send, CAN_ID, d[7]);
+            pack_param_reply(&message_to_send, CFG_CAN_ID, d[7]);
             HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
             return;
         }
@@ -226,16 +226,16 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
                 memcpy(&value, &bits, 4);
                 user_config_set_param((param_id_t)idx, value);
             }
-            can_pending_save = 1;
-            pack_param_reply(&message_to_send, CAN_ID, idx);
+            pending_save = 1;
+            pack_param_reply(&message_to_send, CFG_CAN_ID, idx);
             HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
             return;
         }
     }
 
     /* MIT position/velocity/gain command */
-    pack_reply(&message_to_send, CAN_ID, motor.angle_sensor.mech_angle_rad,
-               motor.angle_sensor.mech_angle_vel, motor.iq*KT*GR, motor.v_bus, motor.motor_temp);
+    pack_reply(&message_to_send, CFG_CAN_ID, motor.angle_sensor.mech_angle_rad,
+               motor.angle_sensor.mech_angle_vel, motor.iq*CFG_KT*CFG_GR, motor.v_bus, motor.motor_temp);
     HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
     if (dlc == 8) {
         unpack_cmd(message_received, (float *)motor.cmd.cmd_buf.commands);
