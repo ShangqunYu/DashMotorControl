@@ -17,7 +17,5 @@
 void run_fsm(FSMStruct *fsmstate);
 void fsm_enter_state(FSMStruct *fsmstate);
 void fsm_exit_state(FSMStruct *fsmstate);
-void enable_motor(void);
-void disable_motor(void);
 
 #endif /* INC_FSM_H_ */

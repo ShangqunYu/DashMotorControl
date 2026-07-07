@@ -41,6 +41,7 @@ void run_fsm(FSMStruct *fsmstate)
     if (motor.cmd.new_cmd) {
         motor.cmd.curr_cmd = motor.cmd.cmd_buf;
         motor.cmd.new_cmd = 0;
+        motor.cmd.timeout_counter = 0;
     }
 
     /* 3. FSM transition management ---------------------------------------- */
@@ -58,6 +59,10 @@ void run_fsm(FSMStruct *fsmstate)
             break;
 
         case MIT_MODE:
+            if (++motor.cmd.timeout_counter > (uint32_t)CFG_CAN_TIMEOUT) {
+                fsmstate->next_state = MENU_MODE;
+                break;
+            }
             mit_control_update(&motor);
             current_control_update(&motor);
             break;
@@ -116,11 +121,12 @@ void fsm_enter_state(FSMStruct *fsmstate)
             break;
 
         case MIT_MODE:
-            enable_motor();
+            enable_motor(&motor);
+            motor.cmd.timeout_counter = 0;
             break;
 
         case CALIBRATION_MODE:
-            enable_motor();
+            enable_motor(&motor);
             foc_cal_encoder_misalignment_start(&motor, &hcal);
             break;
 
@@ -129,7 +135,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
             break;
 
         case R_MEAS_MODE:
-            enable_motor();
+            enable_motor(&motor);
             motor.meas_inj_amp = 3.0f;
             motor.meas_inj_n = 0;
             motor.meas_done  = 0;
@@ -137,7 +143,7 @@ void fsm_enter_state(FSMStruct *fsmstate)
             break;
 
         case L_MEAS_MODE:
-            enable_motor();
+            enable_motor(&motor);
             motor.meas_inj_amp = 3.0f;
             motor.meas_inj_n   = 0;
             motor.meas_done    = 0;
@@ -162,12 +168,12 @@ void fsm_exit_state(FSMStruct *fsmstate)
     switch (fsmstate->curr_state) {
 
         case MIT_MODE:
-            disable_motor();
+            disable_motor(&motor);
         case CALIBRATION_MODE:
-            disable_motor();
+            disable_motor(&motor);
         case R_MEAS_MODE:
         case L_MEAS_MODE:
-            disable_motor();
+            disable_motor(&motor);
             break;
 
         case MENU_MODE:
@@ -183,14 +189,3 @@ void fsm_exit_state(FSMStruct *fsmstate)
 }
 
 
-void disable_motor(){
-    zero_commands(&motor);
-    drv_disable_gd(motor.gateDriver);
-    HAL_GPIO_WritePin(RED_LED, GPIO_PIN_RESET);
-}
-
-void enable_motor(){
-    zero_commands(&motor);
-    drv_enable_gd(motor.gateDriver);
-    HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
-}

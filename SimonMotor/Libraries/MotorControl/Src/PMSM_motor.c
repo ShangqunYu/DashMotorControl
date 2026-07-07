@@ -20,11 +20,17 @@
 #include "foc.h"
 
 
+void enable_motor(PMSM_motor *motor) {
+    zero_commands(motor);
+    drv_enable_gd(motor->gateDriver);
+    HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
+}
 
-
-
-
-
+void disable_motor(PMSM_motor *motor) {
+    zero_commands(motor);
+    drv_disable_gd(motor->gateDriver);
+    HAL_GPIO_WritePin(RED_LED, GPIO_PIN_RESET);
+}
 
 void zero_commands(PMSM_motor *motor) {
     motor->id_ref = 0.0f;
@@ -111,13 +117,14 @@ void motor_init(PMSM_motor *motor) {
     HAL_ADCEx_InjectedStart_IT(&hadc3);
     HAL_Delay(50);
 
-    drv_enable_gd(motor->gateDriver);
+    enable_motor(motor);
     set_pwm_dtc(motor, 0.0f, 0.0f, 0.0f);
     CurrentSensor_calibrate(&motor->current_sensor, 1000U);
     printf("ADC offsets: A=%d, B=%d, C=%d\r\n",
            motor->current_sensor.adc_a_offset,
            motor->current_sensor.adc_b_offset,
            motor->current_sensor.adc_c_offset);
+    disable_motor(motor);
 }
 
 void current_control_update(PMSM_motor *motor) {

@@ -20,19 +20,20 @@ float pi_control(PID_Controller_t *pi, float error) {
     float output = p_term + new_integral;
 
     // Anti-windup with clamping
+    /* Clamp output and apply conditional anti-windup:
+     * freeze when error and integral term have the same sign. 
+     * (error and integral term have opposite signs), so recovery stays fast. */
     if (output > pi->out_max) {
         output = pi->out_max;
-        if (error * (output - p_term) <= 0) { 
+        if (error * (output - p_term) <= 0) {
             pi->integral = new_integral;
         }
-    }
-    else if (output < -pi->out_max) {
+    } else if (output < -pi->out_max) {
         output = -pi->out_max;
         if (error * (output - p_term) <= 0) {
             pi->integral = new_integral;
         }
-    }
-    else {
+    } else {
         pi->integral = new_integral;
     }
 

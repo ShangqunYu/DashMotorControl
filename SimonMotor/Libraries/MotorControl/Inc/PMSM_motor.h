@@ -42,6 +42,7 @@ typedef struct {
 	volatile MIT_CMD cmd_buf;
 	volatile uint8_t new_cmd;
 	volatile uint8_t pending_fsm_cmd;
+	uint32_t timeout_counter;
 } MOTOR_CMD;
 
 typedef struct {
@@ -82,6 +83,8 @@ typedef struct {
 } PMSM_motor;
 
 void motor_init(PMSM_motor *motor);
+void enable_motor(PMSM_motor *motor);
+void disable_motor(PMSM_motor *motor);
 void zero_commands(PMSM_motor *motor);
 void set_limit_current(PMSM_motor *motor, float i_limit);
 void timer_init(PMSM_motor *motor, TIM_HandleTypeDef *htim);
