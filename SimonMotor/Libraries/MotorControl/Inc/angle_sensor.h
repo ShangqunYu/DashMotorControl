@@ -66,8 +66,8 @@ typedef struct {
     uint8_t encd_get_val_flag;
 } AngleSensor_t;
 
-float sensor_get_rad(AngleSensor_t *sensor);
-int sensor_start(AngleSensor_t *sensor);
+float encoder_get_rad(AngleSensor_t *sensor);
+int encoder_start(AngleSensor_t *sensor);
 
 
 /* ── Public API ──────────────────────────────────────────────────────────── */

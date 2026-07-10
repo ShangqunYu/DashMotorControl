@@ -64,7 +64,7 @@ void user_config_set_defaults(void) {
 
 void user_config_apply_defaults(void) {
     if (isnan(CFG_I_MAX)      || CFG_I_MAX      == -1) CFG_I_MAX      = 60.0f;
-    if (isnan(CFG_I_CAL)      || CFG_I_CAL      == -1) CFG_I_CAL      = 10.0f;
+    if (isnan(CFG_I_CAL)      || CFG_I_CAL      == -1) CFG_I_CAL      = 5.0f;
     if (isnan(CFG_PPAIRS)     || CFG_PPAIRS     == -1) CFG_PPAIRS     = 21.0f;
     if (isnan(CFG_TEMP_MAX)   || CFG_TEMP_MAX  == -1)  CFG_TEMP_MAX  = 180.0f;
     if (isnan(CFG_GR)         || CFG_GR         == -1) CFG_GR         = 18.0f;

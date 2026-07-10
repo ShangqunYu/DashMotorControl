@@ -202,7 +202,7 @@ void startMotorMgrTask(void *argument)
 
     if (motor.fsm.curr_state == ENCODER_MODE) {
       // printf("m_angle_raw:  %.4f rad\r\n", motor.angle_sensor.s_rotor_rad_raw);
-      printf("raw_rad: %.4f rad\r\n", motor.angle_sensor.raw_rad);
+      printf("mech_angle_rad: %.4f rad\r\n", motor.angle_sensor.mech_angle_rad);
     }
 
     // printf("id: %.3f\r\n",       motor.id);

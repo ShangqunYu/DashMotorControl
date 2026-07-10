@@ -224,7 +224,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)
   {
-    sensor_get_rad(&motor.angle_sensor);
+    encoder_get_rad(&motor.angle_sensor);
     motor.angle_sensor.encd_get_val_flag = 1;
   }
 }

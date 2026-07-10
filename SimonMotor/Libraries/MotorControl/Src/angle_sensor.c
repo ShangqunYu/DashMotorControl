@@ -15,20 +15,9 @@
 static GPIO_TypeDef *enc_cs_port;
 static uint16_t      enc_cs_pin;
 
-// float MA732_get_rad(){
-//     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_RESET);
-//     uint8_t spi_tx_buffer[] = {0,0};
-//     uint8_t spi_rx_buffer[2];
-//     HAL_SPI_TransmitReceive(&ENC_SPI, (uint8_t*)spi_tx_buffer, (uint8_t *)spi_rx_buffer, 1, 1);
-//     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_SET);
-//     const uint16_t raw_data = ((uint16_t)spi_rx_buffer[1] << 8) | spi_rx_buffer[0];
-//     float angle_scale_factor = 0.00038349519824f;   // 2π / 16384 (14-bit)
-//     float angle_raw = (float)(raw_data >> 2) * angle_scale_factor;
-//     return angle_raw;
-// }
 
 
-float sensor_get_rad(AngleSensor_t *sensor) {
+float encoder_get_rad(AngleSensor_t *sensor) {
     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_SET);
     const uint16_t raw_data = sensor->spi_rx_buffer;
     float angle_scale_factor = 0.00038349519824f;   // 2π / 16384 (14-bit)
@@ -36,7 +25,7 @@ float sensor_get_rad(AngleSensor_t *sensor) {
     return sensor->raw_rad;
 }
 
-int sensor_start(AngleSensor_t *sensor) {
+int encoder_start(AngleSensor_t *sensor) {
     uint16_t cmd = ENC_READ_WORD;
 
 	HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_RESET);
@@ -91,7 +80,7 @@ AngleSensor_t angle_sensor_init() {
       /* MA732 setup */
     for (int i=0; i<20; i++) {
         // MA732_get_rad();
-        sensor_start(&angle_sensor);
+        encoder_start(&angle_sensor);
         HAL_Delay(10);
     }
     return angle_sensor;
@@ -131,7 +120,7 @@ void angle_sensor_set_m_zero(AngleSensor_t *sensor)
 void angle_sensor_update_position(AngleSensor_t *sensor) {
     // sensor->raw_rad = MA732_get_rad();
     if (sensor->encd_get_val_flag) {
-        sensor_start(sensor);
+        encoder_start(sensor);
         sensor->encd_get_val_flag = 0;
     }
     float old_s_angle = sensor->single_rotor_rad;
@@ -210,6 +199,19 @@ void angle_sensor_update_velocity(AngleSensor_t *sensor)
     sensor->rotor_vel = vel;
     sensor->mech_angle_vel = vel / CFG_GR;
 }
+
+
+// float MA732_get_rad(){
+//     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_RESET);
+//     uint8_t spi_tx_buffer[] = {0,0};
+//     uint8_t spi_rx_buffer[2];
+//     HAL_SPI_TransmitReceive(&ENC_SPI, (uint8_t*)spi_tx_buffer, (uint8_t *)spi_rx_buffer, 1, 1);
+//     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_SET);
+//     const uint16_t raw_data = ((uint16_t)spi_rx_buffer[1] << 8) | spi_rx_buffer[0];
+//     float angle_scale_factor = 0.00038349519824f;   // 2π / 16384 (14-bit)
+//     float angle_raw = (float)(raw_data >> 2) * angle_scale_factor;
+//     return angle_raw;
+// }
 
 
 
