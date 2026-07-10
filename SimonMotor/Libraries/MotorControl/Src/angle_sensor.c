@@ -15,23 +15,46 @@
 static GPIO_TypeDef *enc_cs_port;
 static uint16_t      enc_cs_pin;
 
-float MA732_get_rad(){
-    HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_RESET);
-    uint8_t spi_tx_buffer[] = {0,0};
-    uint8_t spi_rx_buffer[2];
-    HAL_SPI_TransmitReceive(&ENC_SPI, (uint8_t*)spi_tx_buffer, (uint8_t *)spi_rx_buffer, 1, 1000);
+// float MA732_get_rad(){
+//     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_RESET);
+//     uint8_t spi_tx_buffer[] = {0,0};
+//     uint8_t spi_rx_buffer[2];
+//     HAL_SPI_TransmitReceive(&ENC_SPI, (uint8_t*)spi_tx_buffer, (uint8_t *)spi_rx_buffer, 1, 1);
+//     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_SET);
+//     const uint16_t raw_data = ((uint16_t)spi_rx_buffer[1] << 8) | spi_rx_buffer[0];
+//     float angle_scale_factor = 0.00038349519824f;   // 2π / 16384 (14-bit)
+//     float angle_raw = (float)(raw_data >> 2) * angle_scale_factor;
+//     return angle_raw;
+// }
+
+
+float sensor_get_rad(AngleSensor_t *sensor) {
     HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_SET);
-    const uint16_t raw_data = ((uint16_t)spi_rx_buffer[1] << 8) | spi_rx_buffer[0];
+    const uint16_t raw_data = sensor->spi_rx_buffer;
     float angle_scale_factor = 0.00038349519824f;   // 2π / 16384 (14-bit)
-    float angle_raw = (float)(raw_data >> 2) * angle_scale_factor;
-    return angle_raw;
+    sensor->raw_rad = (float)(raw_data >> 2) * angle_scale_factor;
+    return sensor->raw_rad;
 }
+
+int sensor_start(AngleSensor_t *sensor) {
+    uint16_t cmd = ENC_READ_WORD;
+
+	HAL_GPIO_WritePin(enc_cs_port, enc_cs_pin, GPIO_PIN_RESET);
+	if (HAL_SPI_TransmitReceive_DMA(&ENC_SPI, (uint8_t*)&cmd, (uint8_t*)&sensor->spi_rx_buffer, 1) != HAL_OK) {
+        return 0;
+    }
+
+	return 1;
+}
+
+
+
 
 AngleSensor_t angle_sensor_init() {
     AngleSensor_t angle_sensor;
-	angle_sensor.e_zero = CFG_E_ZERO_RAD;
-    angle_sensor.m_zero = CFG_M_ZERO_RAD;
-	angle_sensor.sensor_dir = CFG_PHASE_ORDER;
+	angle_sensor.e_zero          = CFG_E_ZERO_RAD;
+    angle_sensor.m_zero          = CFG_M_ZERO_RAD;
+	angle_sensor.sensor_dir      = CFG_PHASE_ORDER;
     angle_sensor.pole_pairs      = (uint8_t)CFG_PPAIRS;
     angle_sensor.mech_angle_rad  = 0;
     angle_sensor.mech_angle_vel  = 0;
@@ -48,10 +71,12 @@ AngleSensor_t angle_sensor_init() {
     angle_sensor.rotor_vel      = 0;
     angle_sensor.turns          = 0;
     angle_sensor.multi_rotor_rad= 0;
-    angle_sensor.s_rotor_rad    = 0;
-    angle_sensor.s_rotor_rad_raw= 0;
+    angle_sensor.single_rotor_rad    = 0;
+    angle_sensor.single_rotor_rad_raw= 0;
     angle_sensor.vel_hat        = 0;
     angle_sensor.obs_ready      = 0;
+    angle_sensor.raw_rad          = 0;
+    angle_sensor.encd_get_val_flag = 1;  /* prime the DMA pump so the first FOC cycle kicks a transfer */
 
     if (CFG_ENC_SEL == 0) {
         enc_cs_port = ENC_CS_INT_PORT;
@@ -65,7 +90,8 @@ AngleSensor_t angle_sensor_init() {
 
       /* MA732 setup */
     for (int i=0; i<20; i++) {
-        MA732_get_rad();
+        // MA732_get_rad();
+        sensor_start(&angle_sensor);
         HAL_Delay(10);
     }
     return angle_sensor;
@@ -93,18 +119,22 @@ void angle_sensor_set_m_zero(AngleSensor_t *sensor)
      * We know that s_rotor_rad = angle_from_ezero - m_zero
      * m_zero := m_zero + s_rotor_rad = m_zero + angle_from_ezero - m_zero = angle_from_ezero
     */
-    sensor->m_zero += sensor->s_rotor_rad;
+    sensor->m_zero += sensor->single_rotor_rad;
     norm_angle_rad(&sensor->m_zero);
-    sensor->s_rotor_rad      = 0.0f;
-    sensor->s_rotor_rad_raw  = 0.0f;
+    sensor->single_rotor_rad      = 0.0f;
+    sensor->single_rotor_rad_raw  = 0.0f;
     sensor->turns            = 0;
     sensor->multi_rotor_rad  = 0.0f;
     sensor->mech_angle_rad   = 0.0f;
 }
 
 void angle_sensor_update_position(AngleSensor_t *sensor) {
-    sensor->raw_rad = MA732_get_rad();
-    float old_s_angle = sensor->s_rotor_rad;
+    // sensor->raw_rad = MA732_get_rad();
+    if (sensor->encd_get_val_flag) {
+        sensor_start(sensor);
+        sensor->encd_get_val_flag = 0;
+    }
+    float old_s_angle = sensor->single_rotor_rad;
 
     // Angle referenced to electrical zero — used for LUT lookup and e_angle
     float angle_from_ezero = sensor->raw_rad - sensor->e_zero;
@@ -128,21 +158,21 @@ void angle_sensor_update_position(AngleSensor_t *sensor) {
     }
 
     // User-facing position: corrected angle minus user-defined mechanical zero
-    sensor->s_rotor_rad = angle_from_ezero - sensor->m_zero;
-    if      (sensor->s_rotor_rad < 0.0f)     sensor->s_rotor_rad += TWO_PI;
-    else if (sensor->s_rotor_rad  >= TWO_PI) sensor->s_rotor_rad -= TWO_PI;
+    sensor->single_rotor_rad = angle_from_ezero - sensor->m_zero;
+    if      (sensor->single_rotor_rad < 0.0f)     sensor->single_rotor_rad += TWO_PI;
+    else if (sensor->single_rotor_rad  >= TWO_PI) sensor->single_rotor_rad -= TWO_PI;
 
     // Multi-turn tracking — skip rollover on first sample to avoid a false jump
     // from uninitialized old_s_angle
-    float diff = sensor->s_rotor_rad - old_s_angle;
+    float diff = sensor->single_rotor_rad - old_s_angle;
     if      (diff >  PI) sensor->turns--;
     else if (diff < -PI) sensor->turns++;
 
     if (!sensor->first_sample) {
         sensor->first_sample = 1;
-        sensor->turns = (sensor->s_rotor_rad > PI) ? -1 : 0;
+        sensor->turns = (sensor->single_rotor_rad > PI) ? -1 : 0;
     }
-    sensor->multi_rotor_rad = sensor->s_rotor_rad + TWO_PI * (float)sensor->turns;
+    sensor->multi_rotor_rad = sensor->single_rotor_rad + TWO_PI * (float)sensor->turns;
     if (sensor->sensor_dir == REVERSE_DIR)
         sensor->multi_rotor_rad = -sensor->multi_rotor_rad;
 

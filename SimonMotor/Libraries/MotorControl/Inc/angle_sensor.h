@@ -20,7 +20,6 @@
 
 float MA732_get_rad();
 
-
 /* ── Sensor direction ────────────────────────────────────────────────────── */
 typedef enum {
     NORMAL_DIR,
@@ -34,14 +33,14 @@ typedef enum {
 #define OBS_BW_HZ     100.0f
 #define OBS_L1        0.0311  // 2·(1−p),      fc=100 Hz, Ts=25 µs
 #define OBS_L2        9.70f    // (1−p)²/Ts,    fc=100 Hz, Ts=25 µs
-#define VEL_ZERO_THRESH   0.01f  // rad/s — clamp to 0 below this (~0.1 RPM)
+#define VEL_ZERO_THRESH   0.01f  // rad/s — clamp to 0 below this 
 
 /* ── Angle / velocity state ──────────────────────────────────────────────── */
 typedef struct {
 
     float raw_rad;          // raw radiance right from the encoder reading
-    float s_rotor_rad;      // user position single turn (LUT-corrected, relative to m_zero)
-    float s_rotor_rad_raw;  // user position before LUT correction (same reference, for comparison)
+    float single_rotor_rad;      // user position single turn (LUT-corrected, relative to m_zero)
+    float single_rotor_rad_raw;  // user position before LUT correction (same reference, for comparison)
     float multi_rotor_rad;  // multiturn mechanical angle (LUT-corrected, relative to m_zero)
     float mech_angle_rad;   // mechanical agnle for the output shaft
     float e_zero;           // electrical zero (rad): encoder reading when e=0, from calibration
@@ -63,7 +62,13 @@ typedef struct {
     /* Encoder nonlinearity correction LUT (populated by angle_sensor_load_lut) */
     float   encd_error_comp[ERROR_LUT_SIZE];
     uint8_t lut_ready;   // 1 once LUT has been loaded and should be applied
+    uint16_t spi_rx_buffer;   // raw 16-bit encoder frame; DMA target, must stay halfword-aligned
+    uint8_t encd_get_val_flag;
 } AngleSensor_t;
+
+float sensor_get_rad(AngleSensor_t *sensor);
+int sensor_start(AngleSensor_t *sensor);
+
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
 

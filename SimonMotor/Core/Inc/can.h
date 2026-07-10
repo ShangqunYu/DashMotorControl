@@ -52,6 +52,12 @@ typedef struct{
 	CAN_TxHeaderTypeDef tx_header;
 }CANTxMessage ;
 
+/* Flash-signal flags, set by the CAN RX ISR on a param write and consumed by the
+ * flash-writing task. pending_reboot marks params only consumed at init (encoder
+ * select), so the task reboots after the write is committed. Defined in can.c. */
+extern volatile uint8_t pending_save;
+extern volatile uint8_t pending_reboot;
+
 void init_can_rx_filter();
 // void can_tx_init();
 void pack_reply(CANTxMessage *msg, uint8_t id, float p, float v, float t, float vb, float temp);

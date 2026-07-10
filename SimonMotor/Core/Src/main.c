@@ -219,6 +219,16 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  if (hspi->Instance == ENC_SPI.Instance)
+  {
+    sensor_get_rad(&motor.angle_sensor);
+    motor.angle_sensor.encd_get_val_flag = 1;
+  }
+}
+
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == ENC_SPI.Instance)

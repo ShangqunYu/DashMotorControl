@@ -169,20 +169,22 @@ void fsm_exit_state(FSMStruct *fsmstate)
 
         case MIT_MODE:
             disable_motor(&motor);
+            break;
         case CALIBRATION_MODE:
             disable_motor(&motor);
+            break;
         case R_MEAS_MODE:
+            disable_motor(&motor);
+            break;
         case L_MEAS_MODE:
             disable_motor(&motor);
             break;
-
         case MENU_MODE:
             break;
-
         case ENCODER_MODE:
+            break;
         case SET_ZERO_MODE:
             break;
-
         default:
             break;
     }

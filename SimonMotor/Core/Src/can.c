@@ -129,6 +129,10 @@ CANTxMessage message_to_send;
 uint32_t tx_mailbox;
 extern PMSM_motor motor;
 volatile uint8_t  pending_save = 0;
+/* Set when a written param is only consumed at init and needs a reboot to take
+ * effect (e.g. encoder select, which resolves SPI CS wiring in angle_sensor_init).
+ * The flash task performs the reset once the write is durably committed. */
+volatile uint8_t  pending_reboot = 0;
 
 void init_can_rx_filter() {
     message_to_send.tx_header.DLC   = 8;
@@ -207,6 +211,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
         return;
     }
 
+    // Handle parameter read/write only in MENU_MODE
     if (motor.fsm.curr_state == MENU_MODE) {
         /* [FF×6][FE][idx] — param read */
         if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFE) {
@@ -225,6 +230,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
                 float value;
                 memcpy(&value, &bits, 4);
                 user_config_set_param((param_id_t)idx, value);
+                /* Encoder select is snapshotted in angle_sensor_init (CS pins +
+                 * MA732 warm-up), so it only takes effect after a reboot. */
+                if (idx == PARAM_CFG_ENC_SEL) pending_reboot = 1;
             }
             pending_save = 1;
             pack_param_reply(&message_to_send, CFG_CAN_ID, idx);

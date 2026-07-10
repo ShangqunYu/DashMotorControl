@@ -33,6 +33,7 @@
 #include "user_config.h"
 #include "preference_writer.h"
 #include "drv8353.h"
+#include "can.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -57,7 +58,6 @@
 extern PMSM_motor       motor;
 extern CalStruct        hcal;
 extern PreferenceWriter prefs;
-extern volatile uint8_t pending_save;
 
 /* FOC loop timing instrumentation (set in HAL_ADCEx_InjectedConvCpltCallback) */
 extern volatile uint32_t foc_loop_cycles_min;
@@ -202,7 +202,7 @@ void startMotorMgrTask(void *argument)
 
     if (motor.fsm.curr_state == ENCODER_MODE) {
       // printf("m_angle_raw:  %.4f rad\r\n", motor.angle_sensor.s_rotor_rad_raw);
-      printf("m_angle_comp: %.4f rad\r\n", motor.angle_sensor.s_rotor_rad);
+      printf("raw_rad: %.4f rad\r\n", motor.angle_sensor.raw_rad);
     }
 
     // printf("id: %.3f\r\n",       motor.id);
@@ -238,6 +238,13 @@ void startFlashWritingTask(void *argument)
     preference_writer_flush(&prefs);
     preference_writer_close(&prefs);
     preference_writer_load(prefs);
+    /* Reboot only after the write is durably committed, so init-consumed params
+     * (encoder select) are picked up by a fresh motor_init. Safe because param
+     * writes are only accepted in MENU_MODE, i.e. the motor is not driving. */
+    if (pending_reboot) {
+      pending_reboot = 0;
+      NVIC_SystemReset();
+    }
   }
   /* USER CODE END startFlashWritingTask */
 }
