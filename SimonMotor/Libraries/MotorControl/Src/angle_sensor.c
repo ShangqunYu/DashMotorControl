@@ -66,6 +66,7 @@ AngleSensor_t angle_sensor_init() {
     angle_sensor.obs_ready      = 0;
     angle_sensor.raw_rad          = 0;
     angle_sensor.encd_get_val_flag = 1;  /* prime the DMA pump so the first FOC cycle kicks a transfer */
+    angle_sensor.stale_counter    = 0;
 
     if (CFG_ENC_SEL == 0) {
         enc_cs_port = ENC_CS_INT_PORT;
@@ -120,8 +121,10 @@ void angle_sensor_set_m_zero(AngleSensor_t *sensor)
 void angle_sensor_update_position(AngleSensor_t *sensor) {
     // sensor->raw_rad = MA732_get_rad();
     if (sensor->encd_get_val_flag) {
-        encoder_start(sensor);
-        sensor->encd_get_val_flag = 0;
+        /* Only consume the flag if the DMA actually armed; otherwise retry next
+         * cycle. A HAL_BUSY/error return fires no callback, so clearing the flag
+         * unconditionally would freeze the pump on a stale angle. */
+        if (encoder_start(sensor)) sensor->encd_get_val_flag = 0;
     }
     float old_s_angle = sensor->single_rotor_rad;
 

@@ -45,6 +45,11 @@
 #define BLDC_PWM_FREQ           40000
 #define FOC_TS                  (1.0f / (float)BLDC_PWM_FREQ)
 
+/* Encoder staleness watchdog: max consecutive FOC cycles with no completed
+ * encoder DMA read before faulting to MENU_MODE. 40 cycles @ 40 kHz = 1 ms.
+ * Normal reads complete every 1-2 cycles, so this only trips on a dead encoder. */
+#define ENC_STALE_TIMEOUT       40U
+
 #define V_BUS_MIN           0.0f			// min drive voltage (faults below this)
 #define V_BUS_MAX			60.0f			// max drive voltage (faults above this)
 
@@ -79,11 +84,6 @@
 #define ERROR_LUT_SIZE      128U    // encoder nonlinearity correction LUT entries
 #define PPAIRS_MAX          64U     // max supported pole pairs (sizes calibration buffer)
 #define N_DETECT_ELECTRIC_CYCLE 20  // how many electric cycle to rotate before calculating the number of pole pair
-
-// LOW PASS FILTER CONTSTNAT FOR CURRENT MEASUREMENT
-#define CURRENT_NOISE_CUTOFF_HZ 5000.0f
-#define CURRENT_SENSE_TIME_CONST 1.0f / (2.0f * 3.14159265f * CURRENT_NOISE_CUTOFF_HZ)
-#define CURRENT_FILTER_ALPHA (CURRENT_SENSE_TIME_CONST / (CURRENT_SENSE_TIME_CONST + FOC_TS))
 
 
 #endif /* INC_HW_CONFIG_H_ */

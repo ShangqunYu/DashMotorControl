@@ -226,6 +226,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
   {
     encoder_get_rad(&motor.angle_sensor);
     motor.angle_sensor.encd_get_val_flag = 1;
+    motor.angle_sensor.stale_counter     = 0;
   }
 }
 
@@ -235,6 +236,9 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
   {
     HAL_GPIO_WritePin(ENC_CS_INT, GPIO_PIN_SET);
     HAL_GPIO_WritePin(ENC_CS_EXT, GPIO_PIN_SET);
+    /* HAL has reset the SPI to READY; re-arm the pump so the next FOC cycle
+     * retries instead of freezing on a stale angle. */
+    motor.angle_sensor.encd_get_val_flag = 1;
   }
 }
 

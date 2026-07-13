@@ -20,9 +20,6 @@ typedef struct {
     float ia;
     float ib;
     float ic;
-    float ia_filtered;
-    float ib_filtered;
-    float ic_filtered;
     volatile uint8_t offset_calibrating;
     volatile uint32_t adc_a_offset_sum;
     volatile uint32_t adc_b_offset_sum;

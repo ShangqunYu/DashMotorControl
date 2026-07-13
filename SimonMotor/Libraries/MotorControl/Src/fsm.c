@@ -16,6 +16,7 @@
 #include "hw_config.h"
 #include "usart.h"
 #include "preference_writer.h"
+#include "can.h"           /* pending_save: request a flash write from the mgr task */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -24,6 +25,22 @@
 /* ── Globals owned by main.c ─────────────────────────────────────────────── */
 extern PMSM_motor       motor;
 extern CalStruct        hcal;
+
+/* ── check_safety ────────────────────────────────────────────────────────────
+ * Per-cycle watchdog for the active-drive modes. Advances the timeout counters
+ * and returns the first tripped fault (FAULT_NONE if healthy). Must be called
+ * exactly once per FOC cycle while driving, since it increments the counters. */
+static motor_fault_t check_safety(PMSM_motor *m)
+{
+    /* No CAN command for too long — drop drive rather than run on a stale command. */
+    if (++m->cmd.timeout_counter > (uint32_t)CFG_CAN_TIMEOUT)  return FAULT_CAN_TIMEOUT;
+    /* Encoder angle stopped updating (dead/unplugged) — don't commutate blind. */
+    if (++m->angle_sensor.stale_counter > ENC_STALE_TIMEOUT)   return FAULT_ENCODER_STALE;
+    /* Bus voltage out of range (V_BUS_MIN defaults to 0 → under-volt disabled). */
+    if (m->v_bus > V_BUS_MAX)                                  return FAULT_OVERVOLTAGE;
+    if (m->v_bus < V_BUS_MIN)                                  return FAULT_UNDERVOLTAGE;
+    return FAULT_NONE;
+}
 
 /* ── run_fsm ─────────────────────────────────────────────────────────────── */
 
@@ -58,14 +75,17 @@ void run_fsm(FSMStruct *fsmstate)
             /* Coast — no PWM drive */
             break;
 
-        case MIT_MODE:
-            if (++motor.cmd.timeout_counter > (uint32_t)CFG_CAN_TIMEOUT) {
+        case MIT_MODE: {
+            motor_fault_t fault = check_safety(&motor);
+            if (fault != FAULT_NONE) {
+                motor.fault = fault;
                 fsmstate->next_state = MENU_MODE;
                 break;
             }
             mit_control_update(&motor);
             current_control_update(&motor);
             break;
+        }
 
         case CALIBRATION_MODE:
             if (hcal.cal_state != CAL_STATE_IDLE &&
@@ -91,7 +111,10 @@ void run_fsm(FSMStruct *fsmstate)
             foc_r_meas_update(&motor);
             if (motor.meas_done) {
                 motor.meas_done = 0;
-                printf("\r\nRs = %.4f Ohm\r\n", motor.Rs);
+                /* Store to RAM config so it can be read back over CAN (no ISR printf),
+                 * then request the mgr task to persist it to flash. */
+                CFG_RESISTANCE = motor.Rs;
+                pending_save = 1;
                 fsmstate->next_state = MENU_MODE;
             }
             break;
@@ -100,8 +123,10 @@ void run_fsm(FSMStruct *fsmstate)
             foc_l_meas_update(&motor);
             if (motor.meas_done) {
                 motor.meas_done = 0;
-                printf("\r\nLd = %.4f mH   Lq = %.4f mH\r\n",
-                       motor.Ld * 1000.0f, motor.Lq * 1000.0f);
+                /* Single inductance slot: store the D/Q average (Ld ~= Lq for this
+                 * motor). Read back over CAN; no ISR printf. Persist via mgr task. */
+                CFG_INDUCTANCE = 0.5f * (motor.Ld + motor.Lq);
+                pending_save = 1;
                 fsmstate->next_state = MENU_MODE;
             }
             break;
@@ -123,6 +148,8 @@ void fsm_enter_state(FSMStruct *fsmstate)
         case MIT_MODE:
             enable_motor(&motor);
             motor.cmd.timeout_counter = 0;
+            motor.angle_sensor.stale_counter = 0;  /* don't inherit a stale count from before entry */
+            motor.fault = FAULT_NONE;
             break;
 
         case CALIBRATION_MODE:
@@ -139,7 +166,6 @@ void fsm_enter_state(FSMStruct *fsmstate)
             motor.meas_inj_amp = 3.0f;
             motor.meas_inj_n = 0;
             motor.meas_done  = 0;
-            printf("\r\nStarting R measurement (Vd = %.2f V)...\r\n", motor.meas_inj_amp);
             break;
 
         case L_MEAS_MODE:
@@ -152,8 +178,6 @@ void fsm_enter_state(FSMStruct *fsmstate)
             motor.l_meas_Ic    = 0.0f;
             motor.l_meas_Is    = 0.0f;
             motor.l_meas_phase = 1;
-            printf("\r\nStarting L measurement (V = %.2f V, f = 1000 Hz)...\r\n",
-                   motor.meas_inj_amp);
             break;
 
         default:

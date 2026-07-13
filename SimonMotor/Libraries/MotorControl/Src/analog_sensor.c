@@ -27,9 +27,6 @@ void CurrentSensor_init(CurrentSensor *sensor,
     sensor->ia = 0.0f;
     sensor->ib = 0.0f;
     sensor->ic = 0.0f;
-    sensor->ia_filtered = 0.0f;
-    sensor->ib_filtered = 0.0f;
-    sensor->ic_filtered = 0.0f;
     sensor->offset_calibrating = 0U;
     sensor->adc_a_offset_sum = 0U;
     sensor->adc_b_offset_sum = 0U;
@@ -41,9 +38,6 @@ void CurrentSensor_update(CurrentSensor *sensor) {
     sensor->ia = (sensor->adc_a_offset - (float)(*sensor->adc_ia)) * sensor->current_scale;
     sensor->ib = (sensor->adc_b_offset - (float)(*sensor->adc_ib)) * sensor->current_scale;
     sensor->ic = (sensor->adc_c_offset - (float)(*sensor->adc_ic)) * sensor->current_scale;
-    sensor->ia_filtered = CURRENT_FILTER_ALPHA * sensor->ia_filtered + (1.0f - CURRENT_FILTER_ALPHA) * sensor->ia;
-    sensor->ib_filtered = CURRENT_FILTER_ALPHA * sensor->ib_filtered + (1.0f - CURRENT_FILTER_ALPHA) * sensor->ib;
-    sensor->ic_filtered = CURRENT_FILTER_ALPHA * sensor->ic_filtered + (1.0f - CURRENT_FILTER_ALPHA) * sensor->ic;
 }
 
 void CurrentSensor_begin_offset_calibration(CurrentSensor *sensor) {

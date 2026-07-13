@@ -205,17 +205,6 @@ void startMotorMgrTask(void *argument)
       printf("mech_angle_rad: %.4f rad\r\n", motor.angle_sensor.mech_angle_rad);
     }
 
-    // printf("id: %.3f\r\n",       motor.id);
-    // printf("id_des: %.3f\r\n",   motor.id_ref);
-    // printf("id_filt: %.3f\r\n",  motor.id_filtered);
-    // printf("iq: %.3f\r\n",       motor.iq);
-    // printf("i_q_des: %.3f\r\n",  motor.iq_ref);
-    // printf("i_q_filt: %.3f\r\n", motor.iq_filtered);
-    // printf("i_a: %.3f\r\n",      motor.current_sensor.ia_filtered);
-    // printf("i_b: %.3f\r\n",      motor.current_sensor.ib_filtered);
-    // printf("i_c: %.3f\r\n",      motor.current_sensor.ic_filtered);
-    // printf("m_angle: %.4f\r\n",  motor.angle_sensor.s_rotor_rad);
-    // printf("e_angle: %.4f\r\n",  motor.angle_sensor.e_rad);
   }
   /* USER CODE END startMotorMgrTask */
 }

@@ -64,6 +64,7 @@ typedef struct {
     uint8_t lut_ready;   // 1 once LUT has been loaded and should be applied
     uint16_t spi_rx_buffer;   // raw 16-bit encoder frame; DMA target, must stay halfword-aligned
     uint8_t encd_get_val_flag;
+    uint32_t stale_counter;   // FOC cycles since last completed read; reset in the DMA cplt callback
 } AngleSensor_t;
 
 float encoder_get_rad(AngleSensor_t *sensor);

@@ -27,6 +27,17 @@ typedef enum {
 	NO_PENDING_MODE  = 0xFF,
 } motor_state;
 
+/* Reason the safety watchdog forced the motor to MENU_MODE. Recorded in
+ * PMSM_motor.fault so it can be reported out-of-ISR (e.g. from the mgr task). */
+typedef enum {
+	FAULT_NONE = 0,
+	FAULT_CAN_TIMEOUT,
+	FAULT_ENCODER_STALE,
+	FAULT_OVERVOLTAGE,
+	FAULT_UNDERVOLTAGE,
+	FAULT_OVERTEMP,
+} motor_fault_t;
+
 typedef struct {
     union{
     	float commands[5];									// Making this easier to pass around without including PMSM_motor.h everywhere
@@ -56,6 +67,8 @@ typedef struct {
 	MOTOR_CMD cmd;
 	FSMStruct fsm;
 	GateDriver gateDriver;
+
+	motor_fault_t fault;   /* last safety-watchdog trip reason; FAULT_NONE when healthy */
 
 	float max_current;
 	float id, iq;
