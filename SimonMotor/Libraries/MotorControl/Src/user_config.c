@@ -13,7 +13,19 @@
 
 #define KT_AFTER_REDUCER 2.97f
 
+bool user_config_param_valid(param_id_t id) {
+    uint8_t idx = (uint8_t)id;
+    if (idx & 0x80) {
+        return (idx & 0x7F) < INT_REG_SIZE;
+    }
+    return idx < FLOAT_REG_SIZE;
+}
+
 void user_config_get_param(param_id_t id, float *out) {
+    if (!user_config_param_valid(id)) {
+        *out = 0.0f;
+        return;
+    }
     uint8_t idx = (uint8_t)id;
     if (idx & 0x80) {
         *out = (float)__int_reg[idx & 0x7F];
@@ -23,6 +35,9 @@ void user_config_get_param(param_id_t id, float *out) {
 }
 
 void user_config_set_param(param_id_t id, float value) {
+    if (!user_config_param_valid(id)) {
+        return;
+    }
     uint8_t idx = (uint8_t)id;
     if (idx & 0x80) {
         __int_reg[idx & 0x7F] = (int)value;

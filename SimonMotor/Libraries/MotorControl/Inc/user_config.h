@@ -8,6 +8,13 @@
 #ifndef INC_USER_CONFIG_H_
 #define INC_USER_CONFIG_H_
 
+#include <stdbool.h>
+
+/* Sizes of the two register banks. Single-sourced here so main.c's definitions
+ * and the bounds checks in user_config.c can never drift apart. */
+#define FLOAT_REG_SIZE 64
+#define INT_REG_SIZE   256
+
 
 #define CFG_PPAIRS           __float_reg[0]              // Number of motor pole-pairs
 #define CFG_GR               __float_reg[1]              // Gear ratio
@@ -76,10 +83,16 @@ typedef enum {
    PARAM_CFG_ENCODER_LUT           = 0x80 | 7,  // __int_reg[7]  (128-element array)
 } param_id_t;
 
-/* Returns the parameter value as a float (int params are cast). */
+/* True if `id` maps to an in-bounds slot in its register bank. Guards against
+ * out-of-range indices arriving from the CAN bus. */
+bool user_config_param_valid(param_id_t id);
+
+/* Returns the parameter value as a float (int params are cast). Invalid ids
+ * yield 0.0f. */
 void user_config_get_param(param_id_t id, float *out);
 
-/* Writes a parameter. Float params written directly; int params cast from float. */
+/* Writes a parameter. Float params written directly; int params cast from float.
+ * Invalid ids are ignored. */
 void user_config_set_param(param_id_t id, float value);
 
 /* Apply defaults only to fields that are uninitialized (erased flash reads as -1/NaN).

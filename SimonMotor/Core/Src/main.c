@@ -29,19 +29,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <math.h>
-#include "hw_config.h"
-#include "user_config.h"
-#include "stm32f4xx_flash.h"
-#include "flash_writer.h"
-#include "preference_writer.h"
-#include "drv8353.h"
 #include <stdio.h>
-#include <string.h>
+#include <math.h>
+#include "user_config.h"
+#include "preference_writer.h"
 #include "PMSM_motor.h"
-#include "angle_sensor.h"
 #include "foc_calibration.h"
-#include "pid_utils.h"
 #include "fsm.h"
 /* USER CODE END Includes */
 
@@ -62,8 +55,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-float __float_reg[64];
-int __int_reg[256];
+float __float_reg[FLOAT_REG_SIZE];
+int __int_reg[INT_REG_SIZE];
 PreferenceWriter prefs;
 
 PMSM_motor motor;

@@ -200,41 +200,69 @@ static void pack_param_reply(CANTxMessage *msg, uint8_t id, uint8_t param_index)
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-    HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &message_received.rx_header, message_received.data);
+    if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &message_received.rx_header,
+                             message_received.data) != HAL_OK) {
+        return;  /* fetch failed — don't parse stale buffer contents */
+    }
 
     uint8_t *d   = message_received.data;
     int      dlc = message_received.rx_header.DLC;
 
-    /* [FF×7][cmd] — mode switch, always allowed */
-    if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFF) {
-        if (d[7] <= L_MEAS_MODE) motor.cmd.pending_fsm_cmd = d[7];
+    /* All control/command frames below carry 8 data bytes. HAL only fills the
+     * first `dlc` bytes and leaves the rest stale from the previous message, so
+     * every decoder that reads high bytes (d[3]..d[7]) is gated on dlc == 8 to
+     * avoid acting on a leftover mode/param byte from an earlier frame. */
+
+    /* [FF×7][cmd] — mode switch.
+     * Accept only when the motor is idle (in MENU_MODE), or when the request is
+     * MENU_MODE itself (the always-honored safe stop / disable). This prevents a
+     * remote frame from throwing a driving or spinning joint straight into
+     * calibration or R/L measurement (open-loop current injection). To start any
+     * active mode you must first return to MENU_MODE. */
+    if (dlc == 8 && d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFF) {
+        uint8_t req = d[7];
+        if (req <= L_MEAS_MODE &&
+            (motor.fsm.curr_state == MENU_MODE || req == MENU_MODE)) {
+            motor.cmd.pending_fsm_cmd = req;
+        }
         return;
     }
 
     // Handle parameter read/write only in MENU_MODE
     if (motor.fsm.curr_state == MENU_MODE) {
         /* [FF×6][FE][idx] — param read */
-        if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFE) {
+        if (dlc == 8 && d[0]==0xFF && d[1]==0xFF && d[2]==0xFF && d[3]==0xFF && d[4]==0xFF && d[5]==0xFF && d[6]==0xFE) {
             pack_param_reply(&message_to_send, CFG_CAN_ID, d[7]);
             HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
             return;
         }
         /* [FF][FF][FD][idx][b3 b2 b1 b0] — param write; idx=0xFF → factory reset */
-        if (d[0]==0xFF && d[1]==0xFF && d[2]==0xFD) {
+        if (dlc == 8 && d[0]==0xFF && d[1]==0xFF && d[2]==0xFD) {
             uint8_t idx = d[3];
+            bool changed = false;
             if (idx == 0xFF) {
                 user_config_set_defaults();
-            } else {
+                changed = true;
+            } else if (user_config_param_valid((param_id_t)idx)) {
                 uint32_t bits = ((uint32_t)d[4] << 24) | ((uint32_t)d[5] << 16)
                               | ((uint32_t)d[6] <<  8) |  (uint32_t)d[7];
                 float value;
                 memcpy(&value, &bits, 4);
                 user_config_set_param((param_id_t)idx, value);
-                /* Encoder select is snapshotted in angle_sensor_init (CS pins +
-                 * MA732 warm-up), so it only takes effect after a reboot. */
-                if (idx == PARAM_CFG_ENC_SEL) pending_reboot = 1;
+                changed = true;
             }
-            pending_save = 1;
+            if (changed) {
+                pending_save = 1;
+                /* Reboot after every write/reset. Several params (D/Q current
+                 * gains, current limit, CAN ID/master, pole pairs, phase order,
+                 * encoder select) are snapshotted at init rather than read live,
+                 * so a clean restart is the only way to guarantee the new value
+                 * takes effect. Safe because param writes are only accepted in
+                 * MENU_MODE (motor not driving); the flash task performs the
+                 * reset after the write is durably committed. */
+                pending_reboot = 1;
+            }
+            /* Invalid idx: no write, no save — just echo so the host sees 0. */
             pack_param_reply(&message_to_send, CFG_CAN_ID, idx);
             HAL_CAN_AddTxMessage(&CAN_H, &message_to_send.tx_header, message_to_send.data, &tx_mailbox);
             return;
