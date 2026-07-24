@@ -271,15 +271,16 @@ int main(void)
   }
     // MA732_start(&hfoc.angle_sensor.ma732);
 
+  __HAL_TIM_SET_COUNTER(&htim1, htim1.Instance->ARR); // Set counter to half of ARR for center-aligned PWM
     /* Turn on PWM */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+  // HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   // the total adc reading takes about 5us, so set the offset to 2.5us to allow for some margin. 
   // uint32_t offset = (uint32_t)((htim1.Instance->ARR+ 1) * 2  / 180 * 2.5);
-  uint32_t offset = (uint32_t)(2.5f * 180);
-  htim1.Instance->CCR4 = htim1.Instance->ARR - 180;
+  // uint32_t offset = (uint32_t)(2.5f * 180);
+  // htim1.Instance->CCR4 = htim1.Instance->ARR - 180;
 
   foc_motor_init(&hfoc, POLE_PAIR, 360.0f);
   foc_sensor_init(&hfoc, 0.0f, NORMAL_DIR);

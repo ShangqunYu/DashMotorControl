@@ -121,12 +121,12 @@ class MotorLink(QObject):
 
         return None
 
-    def _send_mode_frame(self, mode):
+    def _send_mode_frame(self, mode, can_id):
         if not self.serial:
             raise ConnectionError("Serial port is not connected")
 
         mode_data = f"FF FF FF FF FF FF FF {mode:02X}"
-        mode_serial = protocol.can2serial("00000001", mode_data)
+        mode_serial = protocol.can2serial(can_id, mode_data)
         with self._serial_lock:
             self.serial.write(mode_serial)
             time.sleep(0.05)
@@ -134,17 +134,18 @@ class MotorLink(QObject):
                 self.serial.read(self.serial.in_waiting)  # Clear buffer
 
     @contextmanager
-    def _config_transaction(self):
+    def _config_transaction(self, can_id):
         """Pause the background reader for the duration of a config read/write
         so its reply reaches _send_can_frame instead of being consumed and
-        mis-decoded by the plotting path."""
+        mis-decoded by the plotting path. `can_id` is the node being configured;
+        it's forced to MENU_MODE so param access is accepted by the firmware."""
         self._config_busy.set()
         try:
             # Let the reader notice the flag and finish any in-flight read,
             # then clear stale bytes so we only see our own reply.
             time.sleep(0.02)
             self._clear_serial_buffer()
-            self._send_mode_frame(protocol.MENU_MODE)
+            self._send_mode_frame(protocol.MENU_MODE, can_id)
             yield
         finally:
             self._config_busy.clear()
@@ -158,8 +159,8 @@ class MotorLink(QObject):
         serial_cmd = protocol.can2serial(can_id, self._hex_bytes(command_bytes))
         self._write(serial_cmd)
 
-    def set_mode(self, mode):
-        self._send_mode_frame(mode)
+    def set_mode(self, mode, can_id):
+        self._send_mode_frame(mode, can_id)
 
     # ── Config parameter transactions ─────────────────────────────────────────
     @staticmethod
@@ -172,7 +173,7 @@ class MotorLink(QObject):
 
     def read_param(self, can_id, index, timeout=0.2):
         """Read a config parameter. Returns its float value, or None on no reply."""
-        with self._config_transaction():
+        with self._config_transaction(can_id):
             reply = self._send_can_frame(can_id, self._read_payload(index), timeout=timeout)
         return self._decode_param(reply)
 
@@ -180,7 +181,7 @@ class MotorLink(QObject):
         """Read many config parameters within a single config transaction.
         Returns {index: value_or_None}."""
         results = {}
-        with self._config_transaction():
+        with self._config_transaction(can_id):
             for index in indices:
                 reply = self._send_can_frame(can_id, self._read_payload(index), timeout=timeout)
                 results[index] = self._decode_param(reply)
@@ -189,7 +190,7 @@ class MotorLink(QObject):
     def write_param(self, can_id, index, value, timeout=0.2):
         """Write a config parameter. Returns the confirmed value, or None."""
         payload = [0xFF, 0xFF, 0xFD, index] + list(struct.pack(">f", value))
-        with self._config_transaction():
+        with self._config_transaction(can_id):
             reply = self._send_can_frame(can_id, payload, timeout=timeout)
         if reply is None:
             return None
@@ -198,7 +199,7 @@ class MotorLink(QObject):
     def reset_params(self, can_id, timeout=0.2):
         """Reset all parameters to defaults. Returns True if a reply was seen."""
         payload = [0xFF, 0xFF, 0xFD, 0xFF, 0x00, 0x00, 0x00, 0x00]
-        with self._config_transaction():
+        with self._config_transaction(can_id):
             reply = self._send_can_frame(can_id, payload, timeout=timeout)
         return reply is not None
 

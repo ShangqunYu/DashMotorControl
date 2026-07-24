@@ -132,7 +132,7 @@ class MotorControlWindow(QMainWindow):
     # ── Mode control ──────────────────────────────────────────────────────────
     def _enable_mit_mode(self):
         try:
-            self.link.set_mode(protocol.MIT_MODE)
+            self.link.set_mode(protocol.MIT_MODE, self.control_panel.can_id())
             self._set_status("MIT Mode enabled")
             # Start periodic auto-send so we get regular replies for plotting.
             self.auto_send_timer.start()
@@ -141,14 +141,14 @@ class MotorControlWindow(QMainWindow):
 
     def _enable_calibration_mode(self):
         try:
-            self.link.set_mode(protocol.CALIBRATION_MODE)
+            self.link.set_mode(protocol.CALIBRATION_MODE, self.control_panel.can_id())
             self._set_status("Calibration Mode enabled")
         except Exception as e:
             self._set_status(f"Error: {e}")
 
     def _enable_menu_mode(self):
         try:
-            self.link.set_mode(protocol.MENU_MODE)
+            self.link.set_mode(protocol.MENU_MODE, self.control_panel.can_id())
             self._set_status("MENU Mode enabled (motor disabled)")
             # Stop periodic auto-send when motor is disabled.
             self.auto_send_timer.stop()

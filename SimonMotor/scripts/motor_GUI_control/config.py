@@ -39,6 +39,7 @@ CONFIG_PARAMS = [
     (18, "Inductance", "H", 0.00001),
     (0x80 | 0, "Encoder select", "0=internal,1=external", 0),
     (0x80 | 1, "Phase order", "0 same order as encoder, 1 reversed", 0),
+    (0x80 | 2, "CAN ID", "node id (dec)", 1),
     (0x80 | 3, "CAN master", "", 0),
     (0x80 | 4, "CAN timeout", "ms", 10000),
     (0x80 | 5, "Calibration done", "", 0),
