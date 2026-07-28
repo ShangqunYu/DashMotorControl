@@ -66,6 +66,7 @@ void user_config_set_defaults(void) {
     CFG_TEMP_MAX                            = 180.0f;
     CFG_RESISTANCE                          = 0.05f;
     CFG_INDUCTANCE                          = 0.00001f;
+    CFG_THERMISTOR_BETA                     = 3950.0f;
     CFG_ENC_SEL                             = 0;  /* 1 = external encoder */
     CFG_PHASE_ORDER                         = 0;  /* 1 = reverse phase order */
     CFG_CAN_ID                              = 1;
@@ -92,6 +93,7 @@ void user_config_apply_defaults(void) {
     if (isnan(CFG_V_MIN))                          CFG_V_MIN      = -65.0f;
     if (isnan(CFG_E_ZERO_RAD))                     CFG_E_ZERO_RAD = 0.0f;
     if (isnan(CFG_M_ZERO_RAD))                     CFG_M_ZERO_RAD = 0.0f;
+    if (isnan(CFG_THERMISTOR_BETA) || CFG_THERMISTOR_BETA == -1) CFG_THERMISTOR_BETA = 3950.0f;
 
     if (CFG_ENC_SEL     == -1) CFG_ENC_SEL     = 1;
     if (CFG_CAN_ID      == -1) CFG_CAN_ID      = 1;

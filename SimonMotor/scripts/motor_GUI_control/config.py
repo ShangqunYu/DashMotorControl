@@ -37,6 +37,7 @@ CONFIG_PARAMS = [
     (16, "Temp max", "°C", 180.0),
     (17, "Resistance", "Ω", 0.05),
     (18, "Inductance", "H", 0.00001),
+    (19, "Thermistor beta", "K", 3950.0),
     (0x80 | 0, "Encoder select", "0=internal,1=external", 0),
     (0x80 | 1, "Phase order", "0 same order as encoder, 1 reversed", 0),
     (0x80 | 2, "CAN ID", "node id (dec)", 1),

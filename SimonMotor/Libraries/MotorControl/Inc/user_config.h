@@ -35,6 +35,7 @@
 #define CFG_TEMP_MAX         __float_reg[16]              // Temperature safety limit
 #define CFG_RESISTANCE      __float_reg[17]              // D/Q axis winding resistance
 #define CFG_INDUCTANCE      __float_reg[18]              // D/Q axis winding inductance
+#define CFG_THERMISTOR_BETA __float_reg[19]              // NTC beta coefficient (K), varies by thermistor variant
 
 
 #define CFG_ENC_SEL                __int_reg[0]
@@ -73,6 +74,7 @@ typedef enum {
    PARAM_CFG_TEMP_MAX        = 16,        // __float_reg[16]
    PARAM_CFG_RESISTANCE      = 17,        // __float_reg[17]
    PARAM_CFG_INDUCTANCE      = 18,        // __float_reg[18]
+   PARAM_CFG_THERMISTOR_BETA = 19,        // __float_reg[19]
 
    PARAM_CFG_ENC_SEL               = 0x80 | 0,  // __int_reg[0]
    PARAM_CFG_PHASE_ORDER           = 0x80 | 1,  // __int_reg[1]

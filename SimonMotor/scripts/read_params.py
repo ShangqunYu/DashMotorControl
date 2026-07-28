@@ -78,6 +78,7 @@ PARAMS = [
     (16,        "CFG_TEMP_MAX",             "°C"),
     (17,        "CFG_RESISTANCE", "Ω"),
     (18,        "CFG_INDUCTANCE", "H"),
+    (19,        "CFG_THERMISTOR_BETA", "K"),
     (0x80 | 0,  "CFG_ENC_SEL",            "0=internal,1=external"),
     (0x80 | 1,  "CFG_PHASE_ORDER",        "0 same order as encoder, 1 reversed"),
     (0x80 | 2,  "CFG_CAN_ID",             ""),

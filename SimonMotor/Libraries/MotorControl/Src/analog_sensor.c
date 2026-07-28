@@ -6,8 +6,10 @@
 
 #include "analog_sensor.h"
 #include "hw_config.h"
+#include "user_config.h"
 #include "stm32f446xx.h"
 #include "stm32f4xx_hal.h"
+#include <math.h>
 
 void CurrentSensor_init(CurrentSensor *sensor,
                         volatile uint32_t *adc_ia,
@@ -81,9 +83,15 @@ void update_power_voltage(float *v_bus) {
 
 void update_temperature(float *motor_temp) {
     // Voltage divider: VCC →  thermistor → ADC_pin → BASE_RESISTOR → GND
-    // Adc reading is measuring the base resistor voltage drop. 
+    // Adc reading is measuring the base resistor voltage drop.
     float adc_raw = (float)ADC3->JDR2;
     float thermistor_resistance = BASE_RESISTOR_RESISTANCE * (4095.0f - adc_raw) / adc_raw;
-    float temp    = THERMISTOR_NOMINAL_TEMP + (thermistor_resistance - THERMISTOR_NOMINAL_RESISTANCE) / OHM_PER_DEGREE_C;
+
+    // NTC Beta equation: 1/T = 1/T25 + (1/B)*ln(R/R25). Only run at ~1 Hz
+    // (see freertos.c startMotorMgrTask) since logf() is too slow for the FOC ISR.
+    float inv_temp_k = 1.0f / THERMISTOR_NOMINAL_TEMP_K
+                      + logf(thermistor_resistance / THERMISTOR_NOMINAL_RESISTANCE) / CFG_THERMISTOR_BETA;
+    float temp = (1.0f / inv_temp_k) - 273.15f;
+
     *motor_temp  += TEMP_FILT_ALPHA * (temp - *motor_temp);
 }

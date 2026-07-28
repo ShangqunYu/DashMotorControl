@@ -64,10 +64,10 @@
 #define VBUS_FILT_ALPHA		.1f		// 1st order bus voltage filter
 #define TEMP_FILT_ALPHA     .8f     // 1st order Winding temp filter
 #define BASE_RESISTOR_RESISTANCE       10000.0f      //Resistor that is in series with the thermistor for temperature measurement
-#define THERMISTOR_NOMINAL_RESISTANCE  550.0f      // Nominal resistance of the thermistor at 25 degrees C
-#define THERMISTOR_NOMINAL_TEMP           25.0f 
-#define THERMISTOR_160C     1400.0f      // Resistance of the thermistor at 160 degrees C (for beta calculation)
-#define OHM_PER_DEGREE_C    ((THERMISTOR_160C - THERMISTOR_NOMINAL_RESISTANCE) / (160.0f - 25.0f)) // Resistance change per degree C, calculated from the two known points (25C and 160C)
+#define THERMISTOR_NOMINAL_RESISTANCE  10000.0f      // NTC MF51-103F3950: R25 = 10k ohm +/-1%
+#define THERMISTOR_NOMINAL_TEMP           25.0f
+#define THERMISTOR_NOMINAL_TEMP_K        (THERMISTOR_NOMINAL_TEMP + 273.15f)
+// Beta coefficient (B25/50) varies between thermistor variants in use; see CFG_THERMISTOR_BETA in user_config.h
 
 
 
