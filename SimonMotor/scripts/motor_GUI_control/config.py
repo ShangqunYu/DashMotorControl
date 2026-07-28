@@ -38,11 +38,12 @@ CONFIG_PARAMS = [
     (17, "Resistance", "Ω", 0.05),
     (18, "Inductance", "H", 0.00001),
     (19, "Thermistor beta", "K", 3950.0),
+    (20, "Temp cutoff", "°C overtemp safety trip", 100.0),
     (0x80 | 0, "Encoder select", "0=internal,1=external", 0),
     (0x80 | 1, "Phase order", "0 same order as encoder, 1 reversed", 0),
     (0x80 | 2, "CAN ID", "node id (dec)", 1),
     (0x80 | 3, "CAN master", "", 0),
-    (0x80 | 4, "CAN timeout", "ms", 10000),
+    (0x80 | 4, "CAN timeout", "FOC cycles of 25 µs; 10000 = 250 ms", 10000),
     (0x80 | 5, "Calibration done", "", 0),
 ]
 

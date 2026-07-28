@@ -85,6 +85,10 @@ void update_temperature(float *motor_temp) {
     // Voltage divider: VCC →  thermistor → ADC_pin → BASE_RESISTOR → GND
     // Adc reading is measuring the base resistor voltage drop.
     float adc_raw = (float)ADC3->JDR2;
+    /* Rail-level readings mean the thermistor is open or shorted, not a real
+     * temperature (the math below turns them into -273C, which reads as "cold"
+     * and defeats the overtemp fault). Hold the last plausible value instead. */
+    if (adc_raw < TEMP_ADC_RAW_MIN || adc_raw > TEMP_ADC_RAW_MAX) return;
     float thermistor_resistance = BASE_RESISTOR_RESISTANCE * (4095.0f - adc_raw) / adc_raw;
 
     // NTC Beta equation: 1/T = 1/T25 + (1/B)*ln(R/R25). Only run at ~1 Hz

@@ -15,7 +15,7 @@ from serial import Serial
 from PyQt5.QtCore import QObject, pyqtSignal
 
 import protocol
-from config import REPLY_FIELDS
+from config import REPLY_FIELDS, AUTO_SEND_MS
 
 
 class MotorLink(QObject):
@@ -43,6 +43,13 @@ class MotorLink(QObject):
         self._read_thread = None
         self._start_time = None
 
+        # Command streaming (runs in its own thread so a busy GUI event loop
+        # can't starve the firmware's CAN-timeout watchdog).
+        self._stream_enabled = threading.Event()
+        self._stream_cmd = None       # (can_id, {p, v, kp, kd, t_ff}) or None
+        self._stream_error = None     # last emitted error, to avoid spamming
+        self._stream_thread = None
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     def connect(self):
         """Open the serial port. Returns True on success."""
@@ -57,11 +64,13 @@ class MotorLink(QObject):
             return False
 
     def start(self):
-        """Start the background reader thread (no-op if not connected)."""
+        """Start the background reader and streamer threads (no-op if not connected)."""
         if not self.serial:
             return
         self._read_thread = threading.Thread(target=self._read_loop, daemon=True)
         self._read_thread.start()
+        self._stream_thread = threading.Thread(target=self._stream_loop, daemon=True)
+        self._stream_thread.start()
 
     def close(self):
         self.running = False
@@ -129,9 +138,11 @@ class MotorLink(QObject):
         mode_serial = protocol.can2serial(can_id, mode_data)
         with self._serial_lock:
             self.serial.write(mode_serial)
-            time.sleep(0.05)
-            if self.serial.in_waiting:
-                self.serial.read(self.serial.in_waiting)  # Clear buffer
+        # Give the adapter time to turn the frame around, WITHOUT holding the
+        # lock — a lock-held sleep here stalls the command streamer and eats
+        # into the firmware's CAN-timeout budget.
+        time.sleep(0.05)
+        self._clear_serial_buffer()
 
     @contextmanager
     def _config_transaction(self, can_id):
@@ -161,6 +172,50 @@ class MotorLink(QObject):
 
     def set_mode(self, mode, can_id):
         self._send_mode_frame(mode, can_id)
+
+    # ── Command streaming ─────────────────────────────────────────────────────
+    def update_stream_command(self, can_id, command):
+        """Replace the command the streamer repeats. `command` is the kwargs
+        dict for send_command(). Cheap and thread-safe (atomic ref swap)."""
+        self._stream_cmd = (can_id, command)
+
+    def start_streaming(self, can_id, command):
+        """Start repeating `command` every AUTO_SEND_MS from the stream thread.
+        Keeps the firmware's CAN-timeout watchdog fed independently of the GUI
+        event loop (a dragged window or slow redraw must not stop the motor)."""
+        self.update_stream_command(can_id, command)
+        self._stream_error = None
+        self._stream_enabled.set()
+
+    def stop_streaming(self):
+        self._stream_enabled.clear()
+
+    def _stream_loop(self):
+        period = AUTO_SEND_MS / 1000.0
+        while self.running:
+            if not self._stream_enabled.is_set():
+                time.sleep(0.02)
+                continue
+            # A config transaction owns the port (and has forced MENU_MODE);
+            # interleaving commands would corrupt its reply capture.
+            if self._config_busy.is_set():
+                time.sleep(period)
+                continue
+            cmd = self._stream_cmd
+            if cmd is not None:
+                try:
+                    self.send_command(cmd[0], **cmd[1])
+                    if self._stream_error is not None:
+                        self._stream_error = None
+                        self.status_changed.emit("Command streaming recovered")
+                except Exception as e:
+                    # Surface the failure (once per distinct error) instead of
+                    # silently letting the motor hit its CAN timeout.
+                    msg = f"Command stream error: {e}"
+                    if msg != self._stream_error:
+                        self._stream_error = msg
+                        self.status_changed.emit(msg)
+            time.sleep(period)
 
     # ── Config parameter transactions ─────────────────────────────────────────
     @staticmethod
@@ -216,10 +271,11 @@ class MotorLink(QObject):
 
                 with self._serial_lock:
                     n = self.serial.in_waiting
-                    if not n:
-                        time.sleep(0.01)
-                        continue
-                    raw_data = self.serial.read(n)
+                    raw_data = self.serial.read(n) if n else None
+                if raw_data is None:
+                    # Sleep OUTSIDE the lock; command writes must not wait on us.
+                    time.sleep(0.01)
+                    continue
 
                 if raw_data and len(raw_data) > 9:
                     can_data = self._extract_can_payload(raw_data)

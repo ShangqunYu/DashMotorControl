@@ -8,7 +8,7 @@ from PyQt5.QtCore import QTimer
 
 import protocol
 from config import (
-    DEFAULT_PORT, DEFAULT_BAUDRATE, PLOT_REFRESH_MS, AUTO_SEND_MS,
+    DEFAULT_PORT, DEFAULT_BAUDRATE, PLOT_REFRESH_MS,
 )
 from motor_link import MotorLink
 from plot_panel import PlotPanel
@@ -47,6 +47,16 @@ class MotorControlWindow(QMainWindow):
         # so wait for a successful Read All before enabling them.
         self.param_panel.params_read.connect(self._on_params_read)
 
+        # Keep the background command streamer in sync with the control inputs.
+        for spinbox in (
+            self.control_panel.position_input,
+            self.control_panel.velocity_input,
+            self.control_panel.kp_input,
+            self.control_panel.kd_input,
+            self.control_panel.torque_input,
+        ):
+            spinbox.valueChanged.connect(self._push_stream_command)
+
         self.send_btn = QPushButton("SEND COMMAND")
         self.send_btn.setStyleSheet(
             "background-color: #4CAF50; color: white; font-size: 14px; padding: 10px;"
@@ -81,14 +91,11 @@ class MotorControlWindow(QMainWindow):
 
     def _build_timers(self):
         # Redraw the plots at a fixed rate, decoupled from the serial rate.
+        # (Command streaming lives in MotorLink's own thread, not a Qt timer,
+        # so a busy event loop can't trip the firmware's CAN-timeout watchdog.)
         self.plot_timer = QTimer()
         self.plot_timer.timeout.connect(self.plot_panel.refresh)
         self.plot_timer.start(PLOT_REFRESH_MS)
-
-        # Periodic command sending (poll / control loop); started in MIT mode.
-        self.auto_send_timer = QTimer()
-        self.auto_send_timer.timeout.connect(self._auto_send_command)
-        self.auto_send_timer.setInterval(AUTO_SEND_MS)
 
     # ── Signal handlers ───────────────────────────────────────────────────────
     def _set_status(self, message):
@@ -115,27 +122,30 @@ class MotorControlWindow(QMainWindow):
         try:
             cmd = self.control_panel.command()
             self.link.send_command(self.control_panel.can_id(), **cmd)
+            # Keep the streamer repeating what was just sent manually.
+            self.link.update_stream_command(self.control_panel.can_id(), cmd)
             self._set_status(
                 f"Command sent: p={cmd['p']:.2f}, kp={cmd['kp']:.1f}, kd={cmd['kd']:.2f}"
             )
         except Exception as e:
             self._set_status(f"Error: {e}")
 
-    def _auto_send_command(self):
-        """Send the current command periodically to poll the motor / run the
-        control loop, eliciting regular status replies for plotting."""
-        try:
-            self.link.send_command(self.control_panel.can_id(), **self.control_panel.command())
-        except Exception:
-            pass
+    def _push_stream_command(self, *_):
+        """Forward the current control inputs to the background streamer."""
+        self.link.update_stream_command(
+            self.control_panel.can_id(), self.control_panel.command()
+        )
 
     # ── Mode control ──────────────────────────────────────────────────────────
     def _enable_mit_mode(self):
         try:
             self.link.set_mode(protocol.MIT_MODE, self.control_panel.can_id())
             self._set_status("MIT Mode enabled")
-            # Start periodic auto-send so we get regular replies for plotting.
-            self.auto_send_timer.start()
+            # Stream commands from the link's own thread: feeds the firmware
+            # CAN-timeout watchdog and elicits regular replies for plotting.
+            self.link.start_streaming(
+                self.control_panel.can_id(), self.control_panel.command()
+            )
         except Exception as e:
             self._set_status(f"Error: {e}")
 
@@ -148,10 +158,10 @@ class MotorControlWindow(QMainWindow):
 
     def _enable_menu_mode(self):
         try:
+            # Stop streaming first so no command races the mode switch.
+            self.link.stop_streaming()
             self.link.set_mode(protocol.MENU_MODE, self.control_panel.can_id())
             self._set_status("MENU Mode enabled (motor disabled)")
-            # Stop periodic auto-send when motor is disabled.
-            self.auto_send_timer.stop()
         except Exception as e:
             self._set_status(f"Error: {e}")
 

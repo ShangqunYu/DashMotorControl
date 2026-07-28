@@ -39,6 +39,8 @@ static motor_fault_t check_safety(PMSM_motor *m)
     /* Bus voltage out of range (V_BUS_MIN defaults to 0 → under-volt disabled). */
     if (m->v_bus > V_BUS_MAX)                                  return FAULT_OVERVOLTAGE;
     if (m->v_bus < V_BUS_MIN)                                  return FAULT_UNDERVOLTAGE;
+    /* Winding temperature (updated at ~1 Hz by the mgr task; float read is atomic). */
+    if (m->motor_temp > CFG_TEMP_CUTOFF)                       return FAULT_OVERTEMP;
     return FAULT_NONE;
 }
 

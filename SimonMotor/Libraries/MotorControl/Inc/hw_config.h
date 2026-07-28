@@ -68,6 +68,13 @@
 #define THERMISTOR_NOMINAL_TEMP           25.0f
 #define THERMISTOR_NOMINAL_TEMP_K        (THERMISTOR_NOMINAL_TEMP + 273.15f)
 // Beta coefficient (B25/50) varies between thermistor variants in use; see CFG_THERMISTOR_BETA in user_config.h
+/* Plausible ADC window for the thermistor divider. With 10k/10k and B=3950 the
+ * real range is ~99 counts (-40C) to ~4052 counts (180C); readings at the rails
+ * mean the thermistor is open (reads ~0) or shorted (reads ~4095), and the Beta
+ * equation collapses those to -273C — which would quietly defeat the overtemp
+ * fault. Readings outside this window are rejected as a sensor fault. */
+#define TEMP_ADC_RAW_MIN    20.0f
+#define TEMP_ADC_RAW_MAX    4080.0f
 
 
 

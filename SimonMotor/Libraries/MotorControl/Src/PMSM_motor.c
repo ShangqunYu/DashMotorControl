@@ -22,6 +22,10 @@
 
 void enable_motor(PMSM_motor *motor) {
     zero_commands(motor);
+    /* Discard integrator state left over from the previous drive session —
+     * a wound-up integral would replay as a voltage kick on the first cycles. */
+    pid_reset(&motor->id_ctrl);
+    pid_reset(&motor->iq_ctrl);
     drv_enable_gd(motor->gateDriver);
     HAL_GPIO_WritePin(RED_LED, GPIO_PIN_SET);
 }
