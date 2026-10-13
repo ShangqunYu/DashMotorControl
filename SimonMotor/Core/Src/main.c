@@ -98,7 +98,11 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  preference_writer_init(&prefs, 6);
+  /* Config lives in the LAST flash sector. Sector 5 (0x08020000, 128K) is the
+   * last one on the 256K STM32F446RC; it also exists on the 512K RE, so one
+   * layout serves both. The linker caps code at 128K (sectors 0-4) so the
+   * image can never grow into the config sector. */
+  preference_writer_init(&prefs, 5);
   preference_writer_load(prefs);
   user_config_apply_defaults();
   // user_config_set_defaults();
